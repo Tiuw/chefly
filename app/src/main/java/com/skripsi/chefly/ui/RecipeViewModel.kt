@@ -13,6 +13,9 @@ class RecipeViewModel : ViewModel() {
     var detectedIngredients by mutableStateOf<List<String>>(emptyList())
         private set
 
+    var fridgeIngredients by mutableStateOf<Set<String>>(emptySet())
+        private set
+
     fun toggleFavorite(recipeId: Int) {
         favoriteRecipes = if (favoriteRecipes.contains(recipeId)) {
             favoriteRecipes - recipeId
@@ -27,6 +30,26 @@ class RecipeViewModel : ViewModel() {
 
     fun updateDetectedIngredients(ingredients: List<String>) {
         detectedIngredients = ingredients.distinct()
+    }
+
+    fun toggleFridgeIngredient(ingredient: String) {
+        fridgeIngredients = if (fridgeIngredients.contains(ingredient)) {
+            fridgeIngredients - ingredient
+        } else {
+            fridgeIngredients + ingredient
+        }
+    }
+
+    fun isIngredientInFridge(ingredient: String): Boolean {
+        return fridgeIngredients.contains(ingredient)
+    }
+
+    fun clearFridgeIngredients() {
+        fridgeIngredients = emptySet()
+    }
+
+    fun getAllSelectedIngredients(): List<String> {
+        return (detectedIngredients + fridgeIngredients).distinct()
     }
 }
 

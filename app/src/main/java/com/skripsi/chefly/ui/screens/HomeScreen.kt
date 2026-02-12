@@ -31,9 +31,11 @@ fun HomeScreen(
     val recipes = remember { RecipeRepository.getAllRecipes() }
     var searchQuery by remember { mutableStateOf("") }
 
-    val filteredRecipes = remember(searchQuery, viewModel.detectedIngredients) {
-        if (viewModel.detectedIngredients.isNotEmpty() && searchQuery.isEmpty()) {
-            RecipeRepository.searchRecipesByIngredients(viewModel.detectedIngredients)
+    val allSelectedIngredients = viewModel.getAllSelectedIngredients()
+
+    val filteredRecipes = remember(searchQuery, viewModel.detectedIngredients, viewModel.fridgeIngredients) {
+        if (allSelectedIngredients.isNotEmpty() && searchQuery.isEmpty()) {
+            RecipeRepository.searchRecipesByIngredients(allSelectedIngredients)
         } else if (searchQuery.isNotEmpty()) {
             recipes.filter { recipe ->
                 recipe.name.contains(searchQuery, ignoreCase = true) ||
@@ -68,7 +70,7 @@ fun HomeScreen(
             )
 
             // Show detected ingredients chip
-            if (viewModel.detectedIngredients.isNotEmpty() && searchQuery.isEmpty()) {
+            if (allSelectedIngredients.isNotEmpty() && searchQuery.isEmpty()) {
                 Card(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -81,15 +83,24 @@ fun HomeScreen(
                         modifier = Modifier.padding(16.dp)
                     ) {
                         Text(
-                            text = "Showing recipes with detected ingredients:",
+                            text = "Showing recipes with your ingredients:",
                             style = MaterialTheme.typography.labelMedium,
                             fontWeight = FontWeight.Bold
                         )
                         Spacer(modifier = Modifier.height(4.dp))
-                        Text(
-                            text = viewModel.detectedIngredients.joinToString(", "),
-                            style = MaterialTheme.typography.bodyMedium
-                        )
+                        if (viewModel.detectedIngredients.isNotEmpty()) {
+                            Text(
+                                text = "📸 Detected: ${viewModel.detectedIngredients.joinToString(", ")}",
+                                style = MaterialTheme.typography.bodyMedium
+                            )
+                        }
+                        if (viewModel.fridgeIngredients.isNotEmpty()) {
+                            Spacer(modifier = Modifier.height(4.dp))
+                            Text(
+                                text = "🧊 From Fridge: ${viewModel.fridgeIngredients.joinToString(", ")}",
+                                style = MaterialTheme.typography.bodyMedium
+                            )
+                        }
                     }
                 }
             }
@@ -101,11 +112,19 @@ fun HomeScreen(
                 verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
                 items(filteredRecipes) { recipe ->
+                    val matchInfo = if (allSelectedIngredients.isNotEmpty()) {
+                        RecipeRepository.getMatchingIngredientsCount(recipe.id, allSelectedIngredients)
+                    } else {
+                        null
+                    }
+
                     RecipeCard(
                         recipe = recipe,
                         isFavorite = viewModel.isFavorite(recipe.id),
                         onFavoriteClick = { viewModel.toggleFavorite(recipe.id) },
-                        onClick = { onRecipeClick(recipe.id) }
+                        onClick = { onRecipeClick(recipe.id) },
+                        matchingIngredients = matchInfo?.first,
+                        totalIngredients = matchInfo?.second
                     )
                 }
 
@@ -135,7 +154,9 @@ fun RecipeCard(
     recipe: Recipe,
     isFavorite: Boolean,
     onFavoriteClick: () -> Unit,
-    onClick: () -> Unit
+    onClick: () -> Unit,
+    matchingIngredients: Int? = null,
+    totalIngredients: Int? = null
 ) {
     Card(
         modifier = Modifier
@@ -185,8 +206,25 @@ fun RecipeCard(
                 Spacer(modifier = Modifier.height(8.dp))
 
                 Row(
-                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
+                    // Show matching ingredients badge if available
+                    if (matchingIngredients != null && totalIngredients != null) {
+                        Surface(
+                            color = MaterialTheme.colorScheme.primaryContainer,
+                            shape = RoundedCornerShape(12.dp)
+                        ) {
+                            Text(
+                                text = "✓ $matchingIngredients/$totalIngredients match",
+                                style = MaterialTheme.typography.labelSmall,
+                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                                color = MaterialTheme.colorScheme.onPrimaryContainer,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+                    }
+
                     Chip(text = recipe.difficulty)
                     Chip(text = recipe.category)
                 }

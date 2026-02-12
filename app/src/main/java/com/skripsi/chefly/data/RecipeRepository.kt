@@ -414,28 +414,105 @@ object RecipeRepository {
 
     fun getRecipeById(id: Int): Recipe? = allRecipes.find { it.id == id }
 
+    /**
+     * Calculate Jaccard similarity between two sets of ingredients
+     * Jaccard Similarity = |Intersection| / |Union|
+     * Returns a value between 0 and 1, where 1 means perfect match
+     */
+    private fun calculateJaccardSimilarity(
+        detectedIngredients: Set<String>,
+        recipeIngredients: Set<String>
+    ): Double {
+        if (detectedIngredients.isEmpty() && recipeIngredients.isEmpty()) return 1.0
+        if (detectedIngredients.isEmpty() || recipeIngredients.isEmpty()) return 0.0
+
+        // Find intersection: ingredients that match
+        val intersection = detectedIngredients.count { detected ->
+            recipeIngredients.any { recipe ->
+                recipe.contains(detected, ignoreCase = true) ||
+                detected.contains(recipe, ignoreCase = true)
+            }
+        }
+
+        // Find union: all unique ingredients
+        val union = detectedIngredients.size + recipeIngredients.size - intersection
+
+        return if (union > 0) intersection.toDouble() / union.toDouble() else 0.0
+    }
+
+    /**
+     * Search recipes using Jaccard similarity algorithm
+     * Returns recipes sorted by similarity score (highest first)
+     * Only returns recipes with similarity > 0 (at least one ingredient match)
+     */
     fun searchRecipesByIngredients(detectedIngredients: List<String>): List<Recipe> {
         if (detectedIngredients.isEmpty()) return emptyList()
 
         // Normalize detected ingredients for comparison (lowercase and trim)
-        val normalizedDetected = detectedIngredients.map { it.lowercase().trim() }
+        val normalizedDetected = detectedIngredients
+            .map { it.lowercase().trim() }
+            .filter { it.length >= 2 } // Filter out single characters
+            .toSet()
 
-        return allRecipes.filter { recipe ->
-            // Check if recipe contains any of the detected ingredients
-            recipe.ingredients.any { ingredient ->
-                normalizedDetected.any { detected ->
-                    ingredient.lowercase().trim().contains(detected) ||
-                    detected.contains(ingredient.lowercase().trim())
-                }
-            }
-        }.sortedByDescending { recipe ->
-            // Sort by number of matching ingredients (most matches first)
-            recipe.ingredients.count { ingredient ->
-                normalizedDetected.any { detected ->
-                    ingredient.lowercase().trim().contains(detected) ||
-                    detected.contains(ingredient.lowercase().trim())
-                }
+        // Calculate similarity for each recipe and filter by threshold
+        val recipesWithScores = allRecipes.map { recipe ->
+            val normalizedRecipeIngredients = recipe.ingredients
+                .map { it.lowercase().trim() }
+                .toSet()
+
+            val similarity = calculateJaccardSimilarity(normalizedDetected, normalizedRecipeIngredients)
+
+            Pair(recipe, similarity)
+        }.filter { (_, similarity) ->
+            similarity > 0.0 // Only include recipes with at least one matching ingredient
+        }.sortedByDescending { (_, similarity) ->
+            similarity
+        }
+
+        return recipesWithScores.map { it.first }
+    }
+
+    /**
+     * Get Jaccard similarity score for a specific recipe
+     * Useful for displaying match percentage to users
+     */
+    fun getRecipeSimilarityScore(recipeId: Int, detectedIngredients: List<String>): Double {
+        val recipe = getRecipeById(recipeId) ?: return 0.0
+
+        val normalizedDetected = detectedIngredients
+            .map { it.lowercase().trim() }
+            .filter { it.length >= 2 }
+            .toSet()
+
+        val normalizedRecipeIngredients = recipe.ingredients
+            .map { it.lowercase().trim() }
+            .toSet()
+
+        return calculateJaccardSimilarity(normalizedDetected, normalizedRecipeIngredients)
+    }
+
+    /**
+     * Get matching ingredients count for display
+     */
+    fun getMatchingIngredientsCount(recipeId: Int, detectedIngredients: List<String>): Pair<Int, Int> {
+        val recipe = getRecipeById(recipeId) ?: return Pair(0, 0)
+
+        val normalizedDetected = detectedIngredients
+            .map { it.lowercase().trim() }
+            .filter { it.length >= 2 }
+            .toSet()
+
+        val normalizedRecipeIngredients = recipe.ingredients
+            .map { it.lowercase().trim() }
+            .toSet()
+
+        val matchingCount = normalizedDetected.count { detected ->
+            normalizedRecipeIngredients.any { recipe ->
+                recipe.contains(detected, ignoreCase = true) ||
+                detected.contains(recipe, ignoreCase = true)
             }
         }
+
+        return Pair(matchingCount, recipe.ingredients.size)
     }
 }
