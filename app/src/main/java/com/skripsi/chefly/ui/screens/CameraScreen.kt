@@ -60,7 +60,7 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.zIndex
 import androidx.core.content.ContextCompat
-import com.skripsi.chefly.data.DetectedIngredient
+import com.skripsi.chefly.data.model.DetectedIngredient
 import com.skripsi.chefly.ml.YOLOv8sDetector
 import com.skripsi.chefly.ui.RecipeViewModel
 import java.io.ByteArrayOutputStream

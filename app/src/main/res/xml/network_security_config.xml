@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<network-security-config>
+    <domain-config cleartextTrafficPermitted="false">
+        <domain includeSubdomains="true">example.com</domain>
+    </domain-config>
+
+    <!-- Allow HTTPS traffic for image loading -->
+    <trust-anchors>
+        <certificates src="system" />
+    </trust-anchors>
+</network-security-config>
+

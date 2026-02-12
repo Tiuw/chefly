@@ -15,6 +15,9 @@ coil = "2.5.0"
 gson = "2.10.1"
 accompanist = "0.32.0"
 exifinterface = "1.4.2"
+room = "2.6.1"
+okhttp = "4.12.0"
+ksp = "2.0.21-1.0.27" # ✅ Diperbarui agar cocok dengan Kotlin 2.0.21
 
 [libraries]
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
@@ -45,9 +48,16 @@ coil-compose = { group = "io.coil-kt", name = "coil-compose", version.ref = "coi
 gson = { group = "com.google.code.gson", name = "gson", version.ref = "gson" }
 accompanist-permissions = { group = "com.google.accompanist", name = "accompanist-permissions", version.ref = "accompanist" }
 androidx-exifinterface = { group = "androidx.exifinterface", name = "exifinterface", version.ref = "exifinterface" }
+okhttp = { group = "com.squareup.okhttp3", name = "okhttp", version.ref = "okhttp" }
+
+# Room libraries
+androidx-room-runtime = { group = "androidx.room", name = "room-runtime", version.ref = "room" }
+androidx-room-ktx = { group = "androidx.room", name = "room-ktx", version.ref = "room" }
+ksp-room-compiler = { group = "androidx.room", name = "room-compiler", version.ref = "room" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }
 kotlin-android = { id = "org.jetbrains.kotlin.android", version.ref = "kotlin" }
 kotlin-compose = { id = "org.jetbrains.kotlin.plugin.compose", version.ref = "kotlin" }
-
+# ✅ Diganti dari kotlin-kapt ke google-devtools-ksp
+google-devtools-ksp = { id = "com.google.devtools.ksp", version.ref = "ksp" }

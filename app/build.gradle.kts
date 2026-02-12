@@ -2,6 +2,8 @@ plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
     alias(libs.plugins.kotlin.compose)
+    id("com.google.devtools.ksp")
+    id("com.google.dagger.hilt.android")
 }
 
 android {
@@ -41,6 +43,11 @@ android {
 }
 
 dependencies {
+    // remove placeholder kapt entry
+    // use KSP for Room (clean single entry)
+    val room_version = "2.8.4"
+    ksp("androidx.room:room-compiler:$room_version")
+
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.lifecycle.runtime.ktx)
     implementation(libs.androidx.activity.compose)
@@ -51,6 +58,19 @@ dependencies {
     implementation(libs.androidx.compose.material3)
     implementation(libs.androidx.compose.material3.adaptive.navigation.suite)
     implementation("androidx.compose.material:material-icons-extended:1.7.5")
+
+    // Hilt (still uses kapt until KSP-compatible compiler is available)
+    implementation("com.google.dagger:hilt-android:2.51") // ✅ TAMBAHKAN BARIS INI
+    ksp("com.google.dagger:hilt-android-compiler:2.51")
+
+    // Coil with Hilt integration
+    implementation("io.coil-kt:coil-compose:2.5.0")
+    implementation("io.coil-kt:coil:2.5.0")
+    implementation("io.coil-kt:coil-svg:2.5.0")
+    implementation(libs.okhttp)
+
+    // Room runtime
+    implementation("androidx.room:room-runtime:$room_version")
 
     // TensorFlow Lite
     implementation("org.tensorflow:tensorflow-lite:2.13.0")
@@ -66,9 +86,6 @@ dependencies {
     // Navigation
     implementation(libs.androidx.navigation.compose)
 
-    // Coil for image loading
-    implementation(libs.coil.compose)
-
     // Gson for JSON parsing
     implementation(libs.gson)
     implementation(libs.androidx.exifinterface)
@@ -80,4 +97,7 @@ dependencies {
     androidTestImplementation(libs.androidx.compose.ui.test.junit4)
     debugImplementation(libs.androidx.compose.ui.tooling)
     debugImplementation(libs.androidx.compose.ui.test.manifest)
+
+    // Gson for JSON parsing in RecipeRepository
+    implementation("com.google.code.gson:gson:2.11.0")
 }

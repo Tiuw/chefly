@@ -1,9 +1,10 @@
 package com.skripsi.chefly.ui.screens
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
@@ -11,25 +12,52 @@ import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.FavoriteBorder
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.remember
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.produceState
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import coil.compose.AsyncImage
+import androidx.compose.ui.unit.sp
+import androidx.compose.ui.unit.em
+import coil.compose.SubcomposeAsyncImage
 import com.skripsi.chefly.data.Recipe
-import com.skripsi.chefly.data.RecipeRepository
 import com.skripsi.chefly.ui.RecipeViewModel
+import com.skripsi.chefly.data.repository.RecipeRepository
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 
 @OptIn(ExperimentalMaterial3Api::class)
+@Suppress("DEPRECATION")
 @Composable
 fun RecipeDetailScreen(
-    recipeId: Int,
+    recipeId: String,
     viewModel: RecipeViewModel,
     onBackClick: () -> Unit
 ) {
-    val recipe = remember { RecipeRepository.getRecipeById(recipeId) }
+    val context = LocalContext.current
+
+    // Load recipe from Room DB via repository
+    val recipeState by produceState<Recipe?>(initialValue = null, recipeId) {
+        val loaded = withContext(Dispatchers.IO) {
+            try {
+                RecipeRepository.init(context)
+                RecipeRepository.getRecipeById(context, recipeId)
+            } catch (e: Exception) {
+                e.printStackTrace()
+                null
+            }
+        }
+        value = loaded
+    }
+
+    val recipe = recipeState
 
     if (recipe == null) {
         Scaffold(
@@ -38,7 +66,7 @@ fun RecipeDetailScreen(
                     title = { Text("Recipe Not Found") },
                     navigationIcon = {
                         IconButton(onClick = onBackClick) {
-                            Icon(Icons.Default.ArrowBack, contentDescription = "Back")
+                            Icon(Icons.Filled.ArrowBack, contentDescription = "Back")
                         }
                     }
                 )
@@ -61,18 +89,18 @@ fun RecipeDetailScreen(
                 title = { Text("Recipe Details") },
                 navigationIcon = {
                     IconButton(onClick = onBackClick) {
-                        Icon(Icons.Default.ArrowBack, contentDescription = "Back")
+                        Icon(Icons.Filled.ArrowBack, contentDescription = "Back")
                     }
                 },
                 actions = {
-                    IconButton(onClick = { viewModel.toggleFavorite(recipe.id) }) {
+                    IconButton(onClick = { viewModel.toggleFavorite(recipeId) }) {
                         Icon(
-                            imageVector = if (viewModel.isFavorite(recipe.id))
+                            imageVector = if (viewModel.isFavorite(recipeId))
                                 Icons.Default.Favorite
                             else
                                 Icons.Default.FavoriteBorder,
                             contentDescription = "Favorite",
-                            tint = if (viewModel.isFavorite(recipe.id))
+                            tint = if (viewModel.isFavorite(recipeId))
                                 MaterialTheme.colorScheme.error
                             else
                                 MaterialTheme.colorScheme.onSurface
@@ -84,6 +112,8 @@ fun RecipeDetailScreen(
     ) { padding ->
         RecipeDetailContent(
             recipe = recipe,
+            viewModel = viewModel,
+            recipeId = recipeId,
             modifier = Modifier.padding(padding)
         )
     }
@@ -92,157 +122,327 @@ fun RecipeDetailScreen(
 @Composable
 fun RecipeDetailContent(
     recipe: Recipe,
+    viewModel: RecipeViewModel,
+    recipeId: String,
     modifier: Modifier = Modifier
 ) {
+    val cleanedIngredients = recipe.ingredientList
+        .map(::cleanRecipeText)
+        .filter { it.isNotBlank() }
+
+    val cleanedSteps = recipe.instructionList
+        .map(::cleanRecipeText)
+        .map { it.replace(Regex("^\\d+[.)]\\s*"), "") }
+        .filter { it.isNotBlank() }
+
     LazyColumn(
         modifier = modifier.fillMaxSize(),
-        contentPadding = PaddingValues(16.dp),
-        verticalArrangement = Arrangement.spacedBy(16.dp)
+        contentPadding = PaddingValues(bottom = 16.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {
-        // Recipe image
+        // Recipe Hero Image - IMPROVED with gradient overlay
         item {
-            AsyncImage(
-                model = recipe.imageUrl,
-                contentDescription = recipe.name,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(250.dp)
-                    .clip(RoundedCornerShape(16.dp)),
-                contentScale = ContentScale.Crop
-            )
+            val imageUrl = recipe.imageUrl.trim()
+            val isValidImageUrl = imageUrl.isNotEmpty() &&
+                (imageUrl.startsWith("http://") || imageUrl.startsWith("https://"))
+
+            if (isValidImageUrl) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(350.dp)  // Taller image
+                ) {
+                    // Main Image with rounded bottom corners
+                    SubcomposeAsyncImage(
+                        model = imageUrl,
+                        contentDescription = recipe.name,
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .clip(RoundedCornerShape(bottomStart = 24.dp, bottomEnd = 24.dp)),
+                        contentScale = ContentScale.Crop,
+                        loading = {
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .background(MaterialTheme.colorScheme.surfaceVariant),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                CircularProgressIndicator(modifier = Modifier.size(40.dp))
+                            }
+                        },
+                        error = {
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .background(MaterialTheme.colorScheme.surfaceVariant),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Text("Image error", style = MaterialTheme.typography.bodySmall)
+                            }
+                        }
+                    )
+
+                    // Gradient Overlay
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .background(
+                                brush = Brush.verticalGradient(
+                                    colors = listOf(
+                                        Color.Transparent,
+                                        Color.Black.copy(alpha = 0.3f)
+                                    ),
+                                    startY = 100f
+                                )
+                            )
+                    )
+
+                    // Favorite Button (Top Right) - IMPROVED
+                    IconButton(
+                        onClick = { viewModel.toggleFavorite(recipeId) },
+                        modifier = Modifier
+                            .align(Alignment.TopEnd)
+                            .padding(16.dp)
+                            .background(
+                                color = Color.White.copy(alpha = 0.9f),
+                                shape = CircleShape
+                            )
+                    ) {
+                        Icon(
+                            imageVector = if (viewModel.isFavorite(recipeId))
+                                Icons.Default.Favorite
+                            else
+                                Icons.Default.FavoriteBorder,
+                            contentDescription = "Favorite",
+                            tint = if (viewModel.isFavorite(recipeId))
+                                MaterialTheme.colorScheme.error
+                            else
+                                MaterialTheme.colorScheme.outline,
+                            modifier = Modifier.size(28.dp)
+                        )
+                    }
+                }
+            }
         }
 
-        // Recipe name and description
+        // Recipe Title & Category - IMPROVED
         item {
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(20.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                // Title - much larger
                 Text(
                     text = recipe.name,
-                    style = MaterialTheme.typography.headlineMedium,
+                    style = MaterialTheme.typography.headlineSmall,
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 28.sp
+                )
+
+                // Category Badge - with background
+                Surface(
+                    shape = RoundedCornerShape(8.dp),
+                    color = MaterialTheme.colorScheme.primaryContainer
+                ) {
+                    Text(
+                        text = "📁 ${recipe.category}",
+                        style = MaterialTheme.typography.labelMedium,
+                        modifier = Modifier.padding(8.dp, 6.dp),
+                        color = MaterialTheme.colorScheme.onPrimaryContainer,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                }
+
+                // Stats Row
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(16.dp)
+                ) {
+                    if (recipe.totalSteps != null) {
+                        Row(
+                            horizontalArrangement = Arrangement.spacedBy(4.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text("⏱️", fontSize = 18.sp)
+                            Text(
+                                text = "${recipe.totalSteps} steps",
+                                style = MaterialTheme.typography.labelMedium
+                            )
+                        }
+                    }
+
+                    if (recipe.totalIngredients != null) {
+                        Row(
+                            horizontalArrangement = Arrangement.spacedBy(4.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text("🥘", fontSize = 18.sp)
+                            Text(
+                                text = "${recipe.totalIngredients} ingredients",
+                                style = MaterialTheme.typography.labelMedium
+                            )
+                        }
+                    }
+                }
+            }
+        }
+
+        // Ingredients Section
+        item {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(20.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                Text(
+                    text = "Ingredients",
+                    style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Bold
                 )
 
+                HorizontalDivider()
+            }
+        }
+
+        // Ingredient Items
+        items(cleanedIngredients.size) { index ->
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 20.dp, vertical = 8.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.Top
+            ) {
                 Text(
-                    text = recipe.description,
-                    style = MaterialTheme.typography.bodyLarge,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                    text = "${index + 1}.",
+                    style = MaterialTheme.typography.bodyMedium,
+                    fontWeight = FontWeight.SemiBold,
+                    color = MaterialTheme.colorScheme.primary
+                )
+
+                Text(
+                    text = cleanedIngredients[index],
+                    style = MaterialTheme.typography.bodyMedium,
+                    fontWeight = FontWeight.Medium,
+                    maxLines = 3,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f)
+                )
+            }
+
+            if (index < cleanedIngredients.size - 1) {
+                HorizontalDivider(modifier = Modifier.padding(horizontal = 20.dp, vertical = 4.dp))
+            }
+        }
+
+        // Steps Section
+        item {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(20.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                Text(
+                    text = "Steps (${cleanedSteps.size})",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold
                 )
             }
         }
 
-        // Recipe info
-        item {
+        // Step Items
+        items(cleanedSteps.size) { index ->
             Card(
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp),
+                shape = RoundedCornerShape(12.dp),
+                elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
                 colors = CardDefaults.cardColors(
-                    containerColor = MaterialTheme.colorScheme.secondaryContainer
+                    containerColor = MaterialTheme.colorScheme.surface
                 )
             ) {
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(16.dp),
-                    horizontalArrangement = Arrangement.SpaceEvenly
-                ) {
-                    InfoItem(label = "Prep", value = recipe.prepTime)
-                    InfoItem(label = "Cook", value = recipe.cookTime)
-                    InfoItem(label = "Servings", value = recipe.servings.toString())
-                }
-            }
-        }
-
-        // Ingredients section
-        item {
-            Text(
-                text = "Ingredients",
-                style = MaterialTheme.typography.titleLarge,
-                fontWeight = FontWeight.Bold
-            )
-        }
-
-        items(recipe.ingredients) { ingredient ->
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(vertical = 4.dp)
-            ) {
-                Text(
-                    text = "• ",
-                    style = MaterialTheme.typography.bodyLarge
-                )
-                Text(
-                    text = ingredient,
-                    style = MaterialTheme.typography.bodyLarge
-                )
-            }
-        }
-
-        // Instructions section
-        item {
-            Spacer(modifier = Modifier.height(8.dp))
-            Text(
-                text = "Instructions",
-                style = MaterialTheme.typography.titleLarge,
-                fontWeight = FontWeight.Bold
-            )
-        }
-
-        itemsIndexed(recipe.instructions) { index, instruction ->
-            Card(
-                modifier = Modifier.fillMaxWidth(),
-                colors = CardDefaults.cardColors(
-                    containerColor = MaterialTheme.colorScheme.surfaceVariant
-                )
-            ) {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(16.dp)
+                    horizontalArrangement = Arrangement.spacedBy(16.dp)
                 ) {
                     Surface(
-                        shape = RoundedCornerShape(8.dp),
-                        color = MaterialTheme.colorScheme.primary,
-                        modifier = Modifier.size(32.dp)
+                        modifier = Modifier.size(40.dp),
+                        shape = CircleShape,
+                        color = MaterialTheme.colorScheme.primary
                     ) {
                         Box(
-                            contentAlignment = androidx.compose.ui.Alignment.Center,
-                            modifier = Modifier.fillMaxSize()
+                            modifier = Modifier.fillMaxSize(),
+                            contentAlignment = Alignment.Center
                         ) {
                             Text(
-                                text = "${index + 1}",
+                                text = (index + 1).toString(),
                                 style = MaterialTheme.typography.labelLarge,
+                                fontWeight = FontWeight.Bold,
                                 color = MaterialTheme.colorScheme.onPrimary,
-                                fontWeight = FontWeight.Bold
+                                fontSize = 18.sp
                             )
                         }
                     }
 
-                    Spacer(modifier = Modifier.width(12.dp))
-
                     Text(
-                        text = instruction,
-                        style = MaterialTheme.typography.bodyLarge,
-                        modifier = Modifier.weight(1f)
+                        text = cleanedSteps[index],
+                        style = MaterialTheme.typography.bodyMedium,
+                        modifier = Modifier.weight(1f),
+                        lineHeight = 1.5.em,
+                        maxLines = Int.MAX_VALUE,
+                        overflow = TextOverflow.Clip
                     )
                 }
             }
         }
+
+        item {
+            Spacer(modifier = Modifier.height(8.dp))
+        }
     }
 }
 
+private fun cleanRecipeText(raw: String): String {
+    return raw
+        .trim()
+        .replace(Regex("^\\[\\s*"), "")
+        .replace(Regex("\\s*]$"), "")
+        .replace(Regex("^\""), "")
+        .replace(Regex("\"$"), "")
+        .replace(Regex("^'"), "")
+        .replace(Regex("'$"), "")
+        .replace("\\\"", "\"")
+        .trim()
+}
+
 @Composable
-fun InfoItem(label: String, value: String) {
+fun CompactStatCard(
+    label: String,
+    value: String,
+    modifier: Modifier = Modifier
+) {
     Column(
-        horizontalAlignment = androidx.compose.ui.Alignment.CenterHorizontally
+        modifier = modifier
+            .padding(8.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center
     ) {
         Text(
-            text = label,
-            style = MaterialTheme.typography.labelMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
+            text = value,
+            style = MaterialTheme.typography.titleSmall,
+            fontWeight = FontWeight.Bold
         )
         Text(
-            text = value,
-            style = MaterialTheme.typography.titleMedium,
-            fontWeight = FontWeight.Bold
+            text = label,
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.outline
         )
     }
 }

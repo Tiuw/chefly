@@ -10,25 +10,31 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import com.skripsi.chefly.data.RecipeRepository
+import com.skripsi.chefly.data.repository.RecipeRepository
 import com.skripsi.chefly.ui.RecipeViewModel
+import androidx.compose.ui.platform.LocalContext
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun FavoritesScreen(
     viewModel: RecipeViewModel,
-    onRecipeClick: (Int) -> Unit
+    onRecipeClick: (String) -> Unit
 ) {
+    val context = LocalContext.current
+
     val favoriteRecipes = remember(viewModel.favoriteRecipes) {
-        RecipeRepository.getAllRecipes().filter {
-            viewModel.isFavorite(it.id)
+        RecipeRepository.getAllRecipes(context).mapNotNull { recipe ->
+            recipe.id?.let { id -> if (viewModel.isFavorite(id)) recipe to id else null }
         }
     }
 
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Favorite Recipes") }
+                title = { Text("Favorites") },
+                colors = TopAppBarDefaults.topAppBarColors(
+                    containerColor = MaterialTheme.colorScheme.primaryContainer
+                )
             )
         }
     ) { padding ->
@@ -44,14 +50,14 @@ fun FavoritesScreen(
                     verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                     Text(
-                        text = "No favorite recipes yet",
-                        style = MaterialTheme.typography.titleLarge,
+                        text = "No favorites yet",
+                        style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.Bold
                     )
                     Text(
-                        text = "Start adding recipes to your favorites!",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                        text = "Add recipes to favorites!",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.outline
                     )
                 }
             }
@@ -60,15 +66,15 @@ fun FavoritesScreen(
                 modifier = Modifier
                     .fillMaxSize()
                     .padding(padding),
-                contentPadding = PaddingValues(16.dp),
-                verticalArrangement = Arrangement.spacedBy(12.dp)
+                contentPadding = PaddingValues(12.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                items(favoriteRecipes) { recipe ->
-                    RecipeCard(
+                items(favoriteRecipes) { (recipe, id) ->
+                    MinimalRecipeCard(
                         recipe = recipe,
                         isFavorite = true,
-                        onFavoriteClick = { viewModel.toggleFavorite(recipe.id) },
-                        onClick = { onRecipeClick(recipe.id) }
+                        onFavoriteClick = { viewModel.toggleFavorite(id) },
+                        onClick = { onRecipeClick(id) }
                     )
                 }
             }
@@ -82,94 +88,110 @@ fun ProfileScreen() {
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Profile") }
+                title = { Text("Profile") },
+                colors = TopAppBarDefaults.topAppBarColors(
+                    containerColor = MaterialTheme.colorScheme.primaryContainer
+                )
             )
         }
     ) { padding ->
-        Column(
+        LazyColumn(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(padding)
-                .padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp)
+                .padding(12.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            Card(
-                modifier = Modifier.fillMaxWidth()
-            ) {
+            item {
                 Column(
-                    modifier = Modifier.padding(16.dp),
-                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(8.dp),
+                    verticalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
                     Text(
                         text = "Chefly User",
-                        style = MaterialTheme.typography.headlineSmall,
+                        style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.Bold
                     )
                     Text(
-                        text = "Food enthusiast and recipe explorer",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                        text = "AI-powered recipe discovery",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.outline
                     )
                 }
             }
 
-            Card(
-                modifier = Modifier.fillMaxWidth()
-            ) {
+            item {
+                Divider()
+            }
+
+            item {
                 Column(
-                    modifier = Modifier.padding(16.dp),
-                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(8.dp),
+                    verticalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
                     Text(
                         text = "About Chefly",
-                        style = MaterialTheme.typography.titleLarge,
-                        fontWeight = FontWeight.Bold
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.SemiBold
                     )
                     Text(
-                        text = "Chefly is a smart recipe app that uses AI-powered ingredient detection to help you find the perfect recipes based on what you have in your kitchen.",
-                        style = MaterialTheme.typography.bodyMedium
+                        text = "Smart recipe app with AI ingredient detection using YOLOv8 TFLite model for real-time ingredient recognition.",
+                        style = MaterialTheme.typography.bodySmall
                     )
                 }
             }
 
-            Card(
-                modifier = Modifier.fillMaxWidth()
-            ) {
+            item {
+                Divider()
+            }
+
+            item {
                 Column(
-                    modifier = Modifier.padding(16.dp),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(8.dp),
                     verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                     Text(
                         text = "Features",
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Bold
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.SemiBold
                     )
                     FeatureItem("📸 Real-time ingredient detection")
-                    FeatureItem("📖 Browse thousands of recipes")
-                    FeatureItem("❤️ Save favorite recipes")
-                    FeatureItem("🔍 Smart recipe search")
+                    FeatureItem("📖 14,000+ recipes")
+                    FeatureItem("❤️ Save favorites")
+                    FeatureItem("🔍 Smart search")
+                    FeatureItem("🧊 Fridge management")
                 }
             }
 
-            Card(
-                modifier = Modifier.fillMaxWidth()
-            ) {
+            item {
+                Divider()
+            }
+
+            item {
                 Column(
-                    modifier = Modifier.padding(16.dp),
-                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(8.dp),
+                    verticalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
                     Text(
                         text = "App Info",
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Bold
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.SemiBold
                     )
                     Text(
                         text = "Version: 1.0",
-                        style = MaterialTheme.typography.bodyMedium
+                        style = MaterialTheme.typography.bodySmall
                     )
                     Text(
-                        text = "Powered by YOLOv8 TFLite",
-                        style = MaterialTheme.typography.bodyMedium
+                        text = "Built with Jetpack Compose & YOLOv8",
+                        style = MaterialTheme.typography.bodySmall
                     )
                 }
             }
@@ -179,16 +201,9 @@ fun ProfileScreen() {
 
 @Composable
 fun FeatureItem(text: String) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(vertical = 4.dp),
-        horizontalArrangement = Arrangement.spacedBy(8.dp)
-    ) {
-        Text(
-            text = text,
-            style = MaterialTheme.typography.bodyMedium
-        )
-    }
+    Text(
+        text = text,
+        style = MaterialTheme.typography.bodySmall,
+        modifier = Modifier.padding(vertical = 2.dp)
+    )
 }
-
