@@ -4,9 +4,11 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AccountBox
 import androidx.compose.material.icons.filled.Camera
@@ -21,7 +23,6 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -30,13 +31,11 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
-import com.skripsi.chefly.ui.RecipeViewModel
+import com.skripsi.chefly.ui.viewmodel.SharedViewModel
 import com.skripsi.chefly.ui.navigation.Screen
 import com.skripsi.chefly.ui.screens.CameraScreen
-import com.skripsi.chefly.ui.screens.FavoritesScreen
 import com.skripsi.chefly.ui.screens.FridgeScreen
 import com.skripsi.chefly.ui.screens.HomeScreen
-import com.skripsi.chefly.ui.screens.ProfileScreen
 import com.skripsi.chefly.ui.screens.RecipeDetailScreen
 import com.skripsi.chefly.ui.theme.CheflyTheme
 import dagger.hilt.android.AndroidEntryPoint
@@ -57,17 +56,19 @@ class MainActivity : ComponentActivity() {
 @Composable
 fun CheflyApp() {
     val navController = rememberNavController()
-    val viewModel: RecipeViewModel = viewModel()
+    val sharedViewModel: SharedViewModel = viewModel()
     var currentDestination by rememberSaveable { mutableStateOf(AppDestinations.HOME) }
-    var homeSearchResetToken by rememberSaveable { mutableStateOf(0) }
 
     Scaffold(
         modifier = Modifier.fillMaxSize(),
         bottomBar = {
+            // Bauhaus Bottom Navigation Bar
             BottomAppBar(
+                modifier = Modifier
+                    .height(72.dp)
+                    .border(2.dp, MaterialTheme.colorScheme.primary),
                 containerColor = MaterialTheme.colorScheme.surface,
-                tonalElevation = 8.dp,
-                modifier = Modifier.height(80.dp)
+                tonalElevation = 0.dp
             ) {
                 Row(
                     modifier = Modifier
@@ -77,9 +78,9 @@ fun CheflyApp() {
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     // Home
-                    NavigationItem(
+                    BauhausNavItem(
                         icon = Icons.Default.Home,
-                        label = "Home",
+                        label = "HOME",
                         selected = currentDestination == AppDestinations.HOME,
                         onClick = {
                             currentDestination = AppDestinations.HOME
@@ -89,14 +90,14 @@ fun CheflyApp() {
                         }
                     )
 
-                    // Fridge
-                    NavigationItem(
-                        icon = Icons.Default.Kitchen,
-                        label = "My Fridge",
-                        selected = currentDestination == AppDestinations.FRIDGE,
+                    // Favorites
+                    BauhausNavItem(
+                        icon = Icons.Default.Favorite,
+                        label = "SAVED",
+                        selected = currentDestination == AppDestinations.FAVORITES,
                         onClick = {
-                            currentDestination = AppDestinations.FRIDGE
-                            navController.navigate(Screen.Fridge.route) {
+                            currentDestination = AppDestinations.FAVORITES
+                            navController.navigate(Screen.Favorites.route) {
                                 popUpTo(Screen.Home.route)
                             }
                         }
@@ -105,8 +106,8 @@ fun CheflyApp() {
                     // Camera FAB (centered, elevated)
                     Box(
                         modifier = Modifier
-                            .size(72.dp)
-                            .offset(y = (-16).dp)
+                            .size(64.dp)
+                            .offset(y = (-8).dp)
                     ) {
                         FloatingActionButton(
                             onClick = {
@@ -117,50 +118,36 @@ fun CheflyApp() {
                             },
                             modifier = Modifier
                                 .fillMaxSize()
-                                .shadow(
-                                    elevation = 12.dp,
-                                    shape = CircleShape,
-                                    ambientColor = MaterialTheme.colorScheme.primary,
-                                    spotColor = MaterialTheme.colorScheme.primary
-                                ),
-                            containerColor = MaterialTheme.colorScheme.primary,
-                            contentColor = MaterialTheme.colorScheme.onPrimary,
-                            shape = CircleShape
+                                .border(3.dp, MaterialTheme.colorScheme.primary),
+                            containerColor = MaterialTheme.colorScheme.secondary,
+                            contentColor = MaterialTheme.colorScheme.onSecondary,
+                            shape = RoundedCornerShape(0.dp)
                         ) {
-                            Column(
-                                horizontalAlignment = Alignment.CenterHorizontally,
-                                verticalArrangement = Arrangement.Center
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.Camera,
-                                    contentDescription = "Scan Ingredients",
-                                    modifier = Modifier.size(28.dp)
-                                )
-                                Text(
-                                    text = "Scan",
-                                    style = MaterialTheme.typography.labelSmall
-                                )
-                            }
+                            Icon(
+                                imageVector = Icons.Default.Camera,
+                                contentDescription = "Scan",
+                                modifier = Modifier.size(28.dp)
+                            )
                         }
                     }
 
-                    // Favorites
-                    NavigationItem(
-                        icon = Icons.Default.Favorite,
-                        label = "Favorites",
-                        selected = currentDestination == AppDestinations.FAVORITES,
+                    // Fridge
+                    BauhausNavItem(
+                        icon = Icons.Default.Kitchen,
+                        label = "FRIDGE",
+                        selected = currentDestination == AppDestinations.FRIDGE,
                         onClick = {
-                            currentDestination = AppDestinations.FAVORITES
-                            navController.navigate(Screen.Favorites.route) {
+                            currentDestination = AppDestinations.FRIDGE
+                            navController.navigate(Screen.Fridge.route) {
                                 popUpTo(Screen.Home.route)
                             }
                         }
                     )
 
                     // Profile
-                    NavigationItem(
+                    BauhausNavItem(
                         icon = Icons.Default.AccountBox,
-                        label = "Profile",
+                        label = "PROFILE",
                         selected = currentDestination == AppDestinations.PROFILE,
                         onClick = {
                             currentDestination = AppDestinations.PROFILE
@@ -181,23 +168,9 @@ fun CheflyApp() {
             composable(Screen.Home.route) {
                 currentDestination = AppDestinations.HOME
                 HomeScreen(
-                    viewModel = viewModel,
-                    resetSearchTrigger = homeSearchResetToken,
+                    sharedViewModel = sharedViewModel,
                     onRecipeClick = { recipeId ->
                         navController.navigate(Screen.RecipeDetail.createRoute(recipeId))
-                    }
-                )
-            }
-
-            composable(Screen.Camera.route) {
-                currentDestination = AppDestinations.CAMERA
-                CameraScreen(
-                    viewModel = viewModel,
-                    onSearchRecipes = {
-                        navController.navigate(Screen.Home.route) {
-                            popUpTo(Screen.Home.route) { inclusive = true }
-                        }
-                        currentDestination = AppDestinations.HOME
                     }
                 )
             }
@@ -205,7 +178,7 @@ fun CheflyApp() {
             composable(Screen.Fridge.route) {
                 currentDestination = AppDestinations.FRIDGE
                 FridgeScreen(
-                    viewModel = viewModel,
+                    sharedViewModel = sharedViewModel,
                     onNavigateToHome = {
                         navController.navigate(Screen.Home.route) {
                             popUpTo(Screen.Home.route) { inclusive = true }
@@ -215,21 +188,6 @@ fun CheflyApp() {
                 )
             }
 
-            composable(Screen.Favorites.route) {
-                currentDestination = AppDestinations.FAVORITES
-                FavoritesScreen(
-                    viewModel = viewModel,
-                    onRecipeClick = { recipeId ->
-                        navController.navigate(Screen.RecipeDetail.createRoute(recipeId))
-                    }
-                )
-            }
-
-            composable(Screen.Profile.route) {
-                currentDestination = AppDestinations.PROFILE
-                ProfileScreen()
-            }
-
             composable(
                 route = Screen.RecipeDetail.route,
                 arguments = listOf(navArgument("recipeId") { type = NavType.StringType })
@@ -237,7 +195,7 @@ fun CheflyApp() {
                 val recipeId = backStackEntry.arguments?.getString("recipeId") ?: ""
                 RecipeDetailScreen(
                     recipeId = recipeId,
-                    viewModel = viewModel,
+                    sharedViewModel = sharedViewModel,
                     onBackClick = {
                         navController.popBackStack()
                     }
@@ -248,7 +206,7 @@ fun CheflyApp() {
 }
 
 @Composable
-fun NavigationItem(
+fun BauhausNavItem(
     icon: ImageVector,
     label: String,
     selected: Boolean,
@@ -256,9 +214,9 @@ fun NavigationItem(
 ) {
     Column(
         modifier = Modifier
-            .width(64.dp)
+            .width(56.dp)
             .clickable(onClick = onClick)
-            .padding(vertical = 8.dp),
+            .padding(vertical = 4.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center
     ) {
@@ -268,12 +226,13 @@ fun NavigationItem(
             modifier = Modifier.size(24.dp),
             tint = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
         )
-        Spacer(modifier = Modifier.height(4.dp))
+        Spacer(modifier = Modifier.height(2.dp))
         Text(
             text = label,
             style = MaterialTheme.typography.labelSmall,
             color = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
-            maxLines = 1
+            maxLines = 1,
+            fontSize = androidx.compose.ui.unit.TextUnit(10f, androidx.compose.ui.unit.TextUnitType.Sp)
         )
     }
 }

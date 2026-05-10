@@ -74,18 +74,18 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlin.random.Random
 
-// Fun color palette for ingredients
+// Bauhaus color palette for ingredients (based on neo-brutalist design)
 private val ingredientColors = listOf(
-    Color(0xFFFF6B6B), // Red
-    Color(0xFF4ECDC4), // Teal
-    Color(0xFFFFE66D), // Yellow
-    Color(0xFF95E1D3), // Mint
-    Color(0xFFF38181), // Coral
-    Color(0xFFAA96DA), // Purple
-    Color(0xFFFCBF49), // Orange
-    Color(0xFF2EC4B6), // Cyan
-    Color(0xFFE71D36), // Bright Red
-    Color(0xFF7209B7), // Deep Purple
+    Color(0xFFe63b2e), // Bauhaus Red
+    Color(0xFF0055ff), // Bauhaus Blue
+    Color(0xFFffcc00), // Bauhaus Yellow
+    Color(0xFFe63b2e), // Red again
+    Color(0xFF0055ff), // Blue again
+    Color(0xFFffcc00), // Yellow again
+    Color(0xFFe63b2e), // Red
+    Color(0xFF0055ff), // Blue
+    Color(0xFFffcc00), // Yellow
+    Color(0xFF1a1a1a), // Black
 )
 
 @Composable
@@ -633,7 +633,7 @@ fun CameraPreviewScreen(
                 modifier = Modifier
                     .scale(uploadScale)
                     .shadow(8.dp, CircleShape),
-                containerColor = Color(0xFF4ECDC4),
+                containerColor = MaterialTheme.colorScheme.secondary,
                 contentColor = Color.White
             ) {
                 Icon(
@@ -659,7 +659,7 @@ fun CameraPreviewScreen(
                             viewModel.updateDetectedIngredients(emptyList())
                         },
                         modifier = Modifier.size(48.dp),
-                        containerColor = Color(0xFFFF6B6B),
+                        containerColor = MaterialTheme.colorScheme.secondary,
                         contentColor = Color.White
                     ) {
                         Icon(Icons.Default.Close, contentDescription = "Clear", modifier = Modifier.size(20.dp))
@@ -670,8 +670,8 @@ fun CameraPreviewScreen(
                     FloatingActionButton(
                         onClick = { triggerManualDetectOnSelected() },
                         modifier = Modifier.size(48.dp),
-                        containerColor = Color(0xFFFFE66D),
-                        contentColor = Color.Black
+                        containerColor = MaterialTheme.colorScheme.primaryContainer,
+                        contentColor = MaterialTheme.colorScheme.primary
                     ) {
                         Icon(Icons.Default.Refresh, contentDescription = "Re-detect", modifier = Modifier.size(20.dp))
                     }
@@ -720,16 +720,16 @@ fun CameraPreviewScreen(
                             .clip(CircleShape)
                             .background(
                                 if (currentDetections.isNotEmpty())
-                                    Brush.linearGradient(listOf(Color(0xFF4ECDC4), Color(0xFF44CF6C)))
+                                    Color(0xFFffcc00) // Bauhaus Yellow
                                 else
-                                    Brush.linearGradient(listOf(Color(0xFF667eea), Color(0xFF764ba2)))
+                                    Color(0xFF1a1a1a) // Bauhaus Black
                             ),
                         contentAlignment = Alignment.Center
                     ) {
                         Icon(
                             if (currentDetections.isNotEmpty()) Icons.Default.Restaurant else Icons.Outlined.CameraAlt,
                             contentDescription = null,
-                            tint = Color.White,
+                            tint = if (currentDetections.isNotEmpty()) Color(0xFF1a1a1a) else Color.White,
                             modifier = Modifier
                                 .size(24.dp)
                                 .rotate(if (currentDetections.isEmpty()) iconRotation else 0f)
@@ -836,28 +836,23 @@ fun CameraPreviewScreen(
 
                         Spacer(modifier = Modifier.height(12.dp))
 
-                        // Fun search button with gradient
+                        // Fun search button with Bauhaus gradient
                         Button(
                             onClick = onSearchRecipes,
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .height(52.dp),
-                            shape = RoundedCornerShape(16.dp),
+                            shape = RoundedCornerShape(4.dp),
                             colors = ButtonDefaults.buttonColors(containerColor = Color.Transparent),
-                            contentPadding = PaddingValues(0.dp)
+                            contentPadding = PaddingValues(0.dp),
+                            border = androidx.compose.foundation.BorderStroke(2.dp, MaterialTheme.colorScheme.primaryContainer)
                         ) {
                             Box(
                                 modifier = Modifier
                                     .fillMaxSize()
                                     .background(
-                                        Brush.horizontalGradient(
-                                            colors = listOf(
-                                                Color(0xFF667eea),
-                                                Color(0xFF764ba2),
-                                                Color(0xFFf093fb)
-                                            )
-                                        ),
-                                        shape = RoundedCornerShape(16.dp)
+                                        MaterialTheme.colorScheme.primary,
+                                        shape = RoundedCornerShape(2.dp)
                                     ),
                                 contentAlignment = Alignment.Center
                             ) {
@@ -873,7 +868,7 @@ fun CameraPreviewScreen(
                                     )
                                     Spacer(modifier = Modifier.width(8.dp))
                                     Text(
-                                        text = "Find Delicious Recipes",
+                                        text = "FIND RECIPES",
                                         style = MaterialTheme.typography.titleMedium,
                                         color = Color.White,
                                         fontWeight = FontWeight.Bold
@@ -952,15 +947,7 @@ fun PermissionDeniedScreen(onRequestPermission: () -> Unit) {
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(
-                Brush.verticalGradient(
-                    colors = listOf(
-                        Color(0xFF667eea),
-                        Color(0xFF764ba2),
-                        Color(0xFFf093fb)
-                    )
-                )
-            ),
+            .background(MaterialTheme.colorScheme.primaryContainer),
         contentAlignment = Alignment.Center
     ) {
         Column(
@@ -973,24 +960,24 @@ fun PermissionDeniedScreen(onRequestPermission: () -> Unit) {
                     .offset(y = (-bounceOffset).dp)
                     .size(120.dp)
                     .clip(CircleShape)
-                    .background(Color.White.copy(alpha = 0.2f)),
+                    .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.2f)),
                 contentAlignment = Alignment.Center
             ) {
                 Icon(
                     Icons.Outlined.CameraAlt,
                     contentDescription = null,
                     modifier = Modifier.size(60.dp),
-                    tint = Color.White
+                    tint = MaterialTheme.colorScheme.primary
                 )
             }
 
             Spacer(modifier = Modifier.height(32.dp))
 
             Text(
-                text = "Camera Access Needed",
+                text = "CAMERA ACCESS NEEDED",
                 style = MaterialTheme.typography.headlineMedium,
-                color = Color.White,
-                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.primary,
+                fontWeight = FontWeight.Black,
                 textAlign = TextAlign.Center
             )
 
@@ -999,25 +986,26 @@ fun PermissionDeniedScreen(onRequestPermission: () -> Unit) {
             Text(
                 text = "To detect ingredients and find amazing recipes, we need access to your camera. Don't worry, we respect your privacy!",
                 style = MaterialTheme.typography.bodyLarge,
-                color = Color.White.copy(alpha = 0.9f),
+                color = MaterialTheme.colorScheme.onBackground,
                 textAlign = TextAlign.Center,
                 lineHeight = 24.sp
             )
 
             Spacer(modifier = Modifier.height(40.dp))
 
-            // Fun permission button
+            // Bauhaus permission button
             Button(
                 onClick = onRequestPermission,
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(56.dp),
-                shape = RoundedCornerShape(16.dp),
+                    .height(56.dp)
+                    .border(4.dp, MaterialTheme.colorScheme.primary),
+                shape = RoundedCornerShape(0.dp),
                 colors = ButtonDefaults.buttonColors(
-                    containerColor = Color.White,
-                    contentColor = Color(0xFF764ba2)
+                    containerColor = MaterialTheme.colorScheme.primary,
+                    contentColor = Color.White
                 ),
-                elevation = ButtonDefaults.buttonElevation(defaultElevation = 8.dp)
+                elevation = ButtonDefaults.buttonElevation(defaultElevation = 0.dp)
             ) {
                 Icon(
                     Icons.Default.CameraAlt,
@@ -1026,9 +1014,9 @@ fun PermissionDeniedScreen(onRequestPermission: () -> Unit) {
                 )
                 Spacer(modifier = Modifier.width(12.dp))
                 Text(
-                    text = "Enable Camera",
+                    text = "ENABLE CAMERA",
                     style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold
+                    fontWeight = FontWeight.Black
                 )
             }
 
@@ -1055,7 +1043,7 @@ fun PermissionDeniedScreen(onRequestPermission: () -> Unit) {
             Text(
                 text = "Scan ingredients, discover recipes!",
                 style = MaterialTheme.typography.bodyMedium,
-                color = Color.White.copy(alpha = 0.7f),
+                color = MaterialTheme.colorScheme.onBackground,
                 textAlign = TextAlign.Center
             )
         }

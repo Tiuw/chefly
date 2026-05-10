@@ -1,64 +1,103 @@
 package com.skripsi.chefly.ui.theme
 
-import android.os.Build
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.darkColorScheme
-import androidx.compose.material3.dynamicDarkColorScheme
-import androidx.compose.material3.dynamicLightColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.platform.LocalContext
 
-private val DarkColorScheme = darkColorScheme(
-    primary = OrangeLight,
-    secondary = GreenLight,
-    tertiary = Pink80,
-    primaryContainer = OrangeDark,
-    secondaryContainer = GreenDark
+/**
+ * Bauhaus Light Color Scheme
+ * Bold, geometric, neo-brutalist kitchen aesthetic
+ */
+private val LightColorScheme = lightColorScheme(
+    // Primary: Black (#1a1a1a)
+    primary = BauhausPrimary,
+    onPrimary = BauhausOnPrimary,
+    primaryContainer = BauhausPrimaryContainer,
+    onPrimaryContainer = Color(0xFF1a1a1a),
+
+    // Secondary: Red (#e63b2e)
+    secondary = BauhausSecondary,
+    onSecondary = BauhausOnSecondary,
+    secondaryContainer = BauhausSecondaryContainer,
+    onSecondaryContainer = Color(0xFF1a1a1a),
+
+    // Tertiary: Blue (#0055ff)
+    tertiary = BauhausTertiary,
+    onTertiary = BauhausOnTertiary,
+    tertiaryContainer = BauhausTertiaryContainer,
+    onTertiaryContainer = Color(0xFF1a1a1a),
+
+    // Surfaces
+    background = BauhausBackground,
+    onBackground = Color(0xFF1a1a1a),
+    surface = BauhausSurface,
+    onSurface = BauhausOnSurface,
+    surfaceVariant = BauhausSurfaceVariant,
+    onSurfaceVariant = Color(0xFF4a4a4a),
+
+    // Outlines
+    outline = BauhausOutline,
+    outlineVariant = BauhausOutlineVariant,
+
+    // Error
+    error = BauhausError,
+    onError = BauhausOnError,
+    errorContainer = BauhausErrorContainer,
+    onErrorContainer = Color(0xFF93000a)
 )
 
-private val LightColorScheme = lightColorScheme(
-    primary = OrangeDark,
-    secondary = GreenDark,
-    tertiary = Pink40,
-    primaryContainer = OrangeLight,
-    secondaryContainer = GreenLight,
-    background = CreamLight,
-    surface = Color.White
+/**
+ * Bauhaus Dark Color Scheme (optional for future dark mode)
+ */
+private val DarkColorScheme = darkColorScheme(
+    primary = BauhausPrimaryContainer,
+    onPrimary = BauhausPrimary,
+    primaryContainer = BauhausPrimaryContainer,
+    onPrimaryContainer = Color(0xFF1a1a1a),
 
-    /* Other default colors to override
-    background = Color(0xFFFFFBFE),
-    surface = Color(0xFFFFFBFE),
-    onPrimary = Color.White,
+    secondary = BauhausSecondary,
     onSecondary = Color.White,
+    secondaryContainer = BauhausSecondaryContainer,
+    onSecondaryContainer = Color(0xFF1a1a1a),
+
+    tertiary = BauhausTertiary,
     onTertiary = Color.White,
-    onBackground = Color(0xFF1C1B1F),
-    onSurface = Color(0xFF1C1B1F),
-    */
+    tertiaryContainer = BauhausTertiaryContainer,
+    onTertiaryContainer = Color(0xFF1a1a1a),
+
+    background = BauhausPrimary,
+    onBackground = BauhausSurface,
+    surface = Color(0xFF2a2a2a),
+    onSurface = BauhausSurface,
+    surfaceVariant = Color(0xFF3a3a3a),
+    onSurfaceVariant = Color(0xFFd0cbc3),
+
+    outline = BauhausOutline,
+    outlineVariant = BauhausOutlineVariant,
+
+    error = BauhausError,
+    onError = Color.White,
+    errorContainer = BauhausErrorContainer,
+    onErrorContainer = Color(0xFFffa4a0)
 )
 
 @Composable
 fun CheflyTheme(
     darkTheme: Boolean = isSystemInDarkTheme(),
-    // Dynamic color is available on Android 12+
-    dynamicColor: Boolean = true,
+    dynamicColor: Boolean = false, // Disable dynamic colors for consistent Bauhaus design
     content: @Composable () -> Unit
 ) {
     val colorScheme = when {
-        dynamicColor && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S -> {
-            val context = LocalContext.current
-            if (darkTheme) dynamicDarkColorScheme(context) else dynamicLightColorScheme(context)
-        }
-
         darkTheme -> DarkColorScheme
         else -> LightColorScheme
     }
 
     MaterialTheme(
         colorScheme = colorScheme,
-        typography = Typography,
+        typography = BauhausTypography,
         content = content
     )
 }

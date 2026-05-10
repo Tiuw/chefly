@@ -1,9 +1,12 @@
 package com.skripsi.chefly.ui.screens
 
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.ExpandLess
@@ -12,9 +15,13 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import com.skripsi.chefly.ui.RecipeViewModel
+import androidx.compose.ui.unit.sp
+import androidx.lifecycle.viewmodel.compose.viewModel
+import com.skripsi.chefly.ui.viewmodel.FridgeViewModel
+import com.skripsi.chefly.ui.viewmodel.SharedViewModel
 
 data class IngredientCategory(
     val name: String,
@@ -80,44 +87,66 @@ val INGREDIENT_CATEGORIES = listOf(
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun FridgeScreen(
-    viewModel: RecipeViewModel,
+    sharedViewModel: SharedViewModel,
     onNavigateToHome: () -> Unit = {}
 ) {
+    val fridgeViewModel: FridgeViewModel = viewModel()
     val expandedCategories = remember { mutableStateOf(setOf<String>()) }
 
-    Scaffold(
-        topBar = {
-            TopAppBar(
-                title = { Text("My Fridge") },
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.primaryContainer
+    val selectedIngredients by sharedViewModel.fridgeIngredients.collectAsState()
+
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(MaterialTheme.colorScheme.background)
+    ) {
+        // Bauhaus TopAppBar
+        TopAppBar(
+            title = {
+                Text(
+                    "MY FRIDGE",
+                    style = MaterialTheme.typography.displaySmall,
+                    fontWeight = FontWeight.Black
                 )
+            },
+            modifier = Modifier.border(
+                width = 3.dp,
+                color = MaterialTheme.colorScheme.primary
+            ),
+            colors = TopAppBarDefaults.topAppBarColors(
+                containerColor = MaterialTheme.colorScheme.background
             )
-        }
-    ) { padding ->
+        )
+
         LazyColumn(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(padding)
-                .padding(12.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp)
+                .weight(1f)
+                .padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             item {
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(8.dp),
-                    verticalArrangement = Arrangement.spacedBy(4.dp)
-                ) {
-                    Text(
-                        text = "Select your ingredients",
-                        style = MaterialTheme.typography.titleSmall,
-                        fontWeight = FontWeight.SemiBold
-                    )
-                    Text(
-                        text = "Selected: ${viewModel.fridgeIngredients.size}",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.outline
+            Column(
+                modifier = Modifier.fillMaxWidth(),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                Text(
+                    text = "SELECT INGREDIENTS",
+                    style = MaterialTheme.typography.headlineSmall,
+                    fontWeight = FontWeight.Black,
+                    color = MaterialTheme.colorScheme.primary
+                )
+                Text(
+                    text = "Selected: ${selectedIngredients.size} Ingredients",
+                    style = MaterialTheme.typography.titleMedium,
+                    color = MaterialTheme.colorScheme.outline,
+                    fontWeight = FontWeight.SemiBold
+                )
+                    Spacer(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(1.dp)
+                            .background(MaterialTheme.colorScheme.primary)
                     )
                 }
             }
@@ -125,9 +154,10 @@ fun FridgeScreen(
             items(INGREDIENT_CATEGORIES) { category ->
                 val isExpanded = expandedCategories.value.contains(category.name)
 
-                Card(
+                Surface(
                     modifier = Modifier
                         .fillMaxWidth()
+                        .border(2.dp, MaterialTheme.colorScheme.primary)
                         .clickable {
                             expandedCategories.value = if (isExpanded) {
                                 expandedCategories.value - category.name
@@ -135,61 +165,70 @@ fun FridgeScreen(
                                 expandedCategories.value + category.name
                             }
                         },
-                    shape = MaterialTheme.shapes.medium,
-                    colors = CardDefaults.cardColors(
-                        containerColor = MaterialTheme.colorScheme.surface
-                    ),
-                    elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
+                    color = MaterialTheme.colorScheme.surface,
+                    shape = RoundedCornerShape(0.dp)
                 ) {
                     Column {
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .padding(12.dp),
+                                .padding(16.dp),
                             verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.SpaceBetween
                         ) {
                             Text(
                                 text = category.name,
-                                style = MaterialTheme.typography.titleSmall,
-                                fontWeight = FontWeight.SemiBold,
-                                modifier = Modifier.weight(1f)
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.Bold,
+                                modifier = Modifier.weight(1f),
+                                color = MaterialTheme.colorScheme.primary
                             )
                             Icon(
                                 imageVector = if (isExpanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
                                 contentDescription = "Expand",
-                                modifier = Modifier.size(20.dp),
-                                tint = MaterialTheme.colorScheme.outline
+                                modifier = Modifier.size(24.dp),
+                                tint = MaterialTheme.colorScheme.primary
                             )
                         }
 
                         if (isExpanded) {
-                            Divider(modifier = Modifier.padding(horizontal = 12.dp))
+                            Spacer(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(1.dp)
+                                    .background(MaterialTheme.colorScheme.primaryContainer)
+                            )
                             Column(
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .padding(12.dp),
-                                verticalArrangement = Arrangement.spacedBy(8.dp)
+                                    .padding(16.dp),
+                                verticalArrangement = Arrangement.spacedBy(10.dp)
                             ) {
                                 category.items.forEach { ingredient ->
                                     Row(
                                         modifier = Modifier
                                             .fillMaxWidth()
                                             .clickable {
-                                                viewModel.toggleFridgeIngredient(ingredient)
+                                                sharedViewModel.toggleFridgeIngredient(ingredient)
                                             }
                                             .padding(8.dp),
                                         verticalAlignment = Alignment.CenterVertically,
-                                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                        horizontalArrangement = Arrangement.spacedBy(12.dp)
                                     ) {
                                         Checkbox(
-                                            checked = viewModel.isIngredientInFridge(ingredient),
-                                            onCheckedChange = { viewModel.toggleFridgeIngredient(ingredient) },
-                                            modifier = Modifier.size(20.dp)
+                                            checked = sharedViewModel.isIngredientInFridge(ingredient),
+                                            onCheckedChange = { sharedViewModel.toggleFridgeIngredient(ingredient) },
+                                            modifier = Modifier.size(20.dp),
+                                            colors = CheckboxDefaults.colors(
+                                                checkedColor = MaterialTheme.colorScheme.primary,
+                                                uncheckedColor = MaterialTheme.colorScheme.outline
+                                            )
                                         )
                                         Text(
                                             text = ingredient,
-                                            style = MaterialTheme.typography.bodySmall
+                                            style = MaterialTheme.typography.bodyMedium,
+                                            color = MaterialTheme.colorScheme.onSurface,
+                                            fontWeight = FontWeight.Medium
                                         )
                                     }
                                 }
@@ -199,78 +238,7 @@ fun FridgeScreen(
                 }
             }
 
-            if (viewModel.fridgeIngredients.isNotEmpty()) {
-                item {
-                    Column(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(12.dp),
-                        verticalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        Text(
-                            text = "Your ingredients (${viewModel.fridgeIngredients.size})",
-                            style = MaterialTheme.typography.titleSmall,
-                            fontWeight = FontWeight.SemiBold
-                        )
-                        Column(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(8.dp),
-                            verticalArrangement = Arrangement.spacedBy(6.dp)
-                        ) {
-                            viewModel.fridgeIngredients.forEach { ingredient ->
-                                Row(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .padding(6.dp),
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.SpaceBetween
-                                ) {
-                                    Text(
-                                        text = "✓ $ingredient",
-                                        style = MaterialTheme.typography.bodySmall,
-                                        color = MaterialTheme.colorScheme.primary,
-                                        fontWeight = FontWeight.Medium
-                                    )
-                                    Icon(
-                                        imageVector = Icons.Default.Add,
-                                        contentDescription = "Remove",
-                                        modifier = Modifier
-                                            .size(16.dp)
-                                            .clickable {
-                                                viewModel.toggleFridgeIngredient(ingredient)
-                                            },
-                                        tint = MaterialTheme.colorScheme.error
-                                    )
-                                }
-                            }
-                        }
-
-                        FilledTonalButton(
-                            onClick = { viewModel.clearFridgeIngredients() },
-                            modifier = Modifier.fillMaxWidth()
-                        ) {
-                            Text("Clear All")
-                        }
-
-                        Spacer(modifier = Modifier.height(12.dp))
-
-                        Button(
-                            onClick = { onNavigateToHome() },
-                            modifier = Modifier.fillMaxWidth(),
-                            colors = ButtonDefaults.buttonColors(
-                                containerColor = MaterialTheme.colorScheme.primary
-                            )
-                        ) {
-                            Text(
-                                "🔍 Cari di Resep",
-                                color = MaterialTheme.colorScheme.onPrimary,
-                                fontWeight = FontWeight.SemiBold
-                            )
-                        }
-                    }
-                }
-            } else {
+            if (selectedIngredients.isEmpty()) {
                 item {
                     Box(
                         modifier = Modifier
@@ -279,9 +247,10 @@ fun FridgeScreen(
                         contentAlignment = Alignment.Center
                     ) {
                         Text(
-                            text = "No ingredients selected",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.outline
+                            text = "NO INGREDIENTS SELECTED",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.outline,
+                            fontWeight = FontWeight.SemiBold
                         )
                     }
                 }
@@ -289,6 +258,97 @@ fun FridgeScreen(
 
             item {
                 Spacer(modifier = Modifier.height(8.dp))
+            }
+        }
+
+        // Selected Ingredients & Action Button
+        if (selectedIngredients.isNotEmpty()) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(16.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .border(2.dp, MaterialTheme.colorScheme.primary)
+                        .background(Color.White)
+                        .padding(12.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Text(
+                        text = "SELECTED (${selectedIngredients.size})",
+                        style = MaterialTheme.typography.headlineSmall,
+                        fontWeight = FontWeight.Black,
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                    selectedIngredients.forEach { ingredient ->
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(4.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Text(
+                                text = "✓ $ingredient",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.primary,
+                                fontWeight = FontWeight.Bold
+                            )
+                            Icon(
+                                imageVector = Icons.Default.Add,
+                                contentDescription = "Remove",
+                                modifier = Modifier
+                                    .size(20.dp)
+                                    .clickable {
+                                        sharedViewModel.toggleFridgeIngredient(ingredient)
+                                    },
+                                tint = MaterialTheme.colorScheme.error
+                            )
+                        }
+                    }
+                }
+
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(48.dp),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    FilledTonalButton(
+                        onClick = { sharedViewModel.clearFridgeIngredients() },
+                        modifier = Modifier
+                            .weight(1f)
+                            .fillMaxHeight()
+                    ) {
+                        Text(
+                            "CLEAR ALL",
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 13.sp
+                        )
+                    }
+
+                    Button(
+                        onClick = { onNavigateToHome() },
+                        modifier = Modifier
+                            .weight(2f)
+                            .fillMaxHeight()
+                            .border(2.dp, MaterialTheme.colorScheme.primary),
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = MaterialTheme.colorScheme.primary
+                        ),
+                        shape = RoundedCornerShape(0.dp)
+                    ) {
+                        Text(
+                            "🔍 FIND RECIPES",
+                            color = MaterialTheme.colorScheme.onPrimary,
+                            fontWeight = FontWeight.Black,
+                            fontSize = 13.sp
+                        )
+                    }
+                }
             }
         }
     }

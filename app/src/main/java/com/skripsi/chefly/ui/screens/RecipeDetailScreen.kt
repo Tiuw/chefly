@@ -1,6 +1,7 @@
 package com.skripsi.chefly.ui.screens
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -12,8 +13,8 @@ import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.FavoriteBorder
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.produceState
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -26,95 +27,126 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.unit.em
+import androidx.lifecycle.viewmodel.compose.viewModel
 import coil.compose.SubcomposeAsyncImage
 import com.skripsi.chefly.data.Recipe
-import com.skripsi.chefly.ui.RecipeViewModel
-import com.skripsi.chefly.data.repository.RecipeRepository
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.withContext
+import com.skripsi.chefly.ui.viewmodel.RecipeDetailViewModel
+import com.skripsi.chefly.ui.viewmodel.SharedViewModel
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Suppress("DEPRECATION")
 @Composable
 fun RecipeDetailScreen(
     recipeId: String,
-    viewModel: RecipeViewModel,
+    sharedViewModel: SharedViewModel,
     onBackClick: () -> Unit
 ) {
     val context = LocalContext.current
+    val detailViewModel: RecipeDetailViewModel = viewModel()
+    val isFavorite = sharedViewModel.favoriteRecipes.collectAsState()
+    val recipeState = detailViewModel.recipe.collectAsState()
+    val isLoading = detailViewModel.isLoading.collectAsState()
+    val loadError = detailViewModel.loadError.collectAsState()
 
-    // Load recipe from Room DB via repository
-    val recipeState by produceState<Recipe?>(initialValue = null, recipeId) {
-        val loaded = withContext(Dispatchers.IO) {
-            try {
-                RecipeRepository.init(context)
-                RecipeRepository.getRecipeById(context, recipeId)
-            } catch (e: Exception) {
-                e.printStackTrace()
-                null
-            }
-        }
-        value = loaded
+    val recipe = recipeState.value
+
+    LaunchedEffect(Unit) {
+        detailViewModel.loadRecipe(context, recipeId)
     }
-
-    val recipe = recipeState
 
     if (recipe == null) {
-        Scaffold(
-            topBar = {
-                TopAppBar(
-                    title = { Text("Recipe Not Found") },
-                    navigationIcon = {
-                        IconButton(onClick = onBackClick) {
-                            Icon(Icons.Filled.ArrowBack, contentDescription = "Back")
-                        }
-                    }
-                )
-            }
-        ) { padding ->
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(padding)
-            ) {
-                Text("Recipe not found")
-            }
-        }
-        return
-    }
-
-    Scaffold(
-        topBar = {
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(MaterialTheme.colorScheme.background)
+        ) {
             TopAppBar(
-                title = { Text("Recipe Details") },
+                title = {
+                    Text(
+                        "RECIPE NOT FOUND",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Black
+                    )
+                },
                 navigationIcon = {
                     IconButton(onClick = onBackClick) {
                         Icon(Icons.Filled.ArrowBack, contentDescription = "Back")
                     }
                 },
-                actions = {
-                    IconButton(onClick = { viewModel.toggleFavorite(recipeId) }) {
-                        Icon(
-                            imageVector = if (viewModel.isFavorite(recipeId))
-                                Icons.Default.Favorite
-                            else
-                                Icons.Default.FavoriteBorder,
-                            contentDescription = "Favorite",
-                            tint = if (viewModel.isFavorite(recipeId))
-                                MaterialTheme.colorScheme.error
-                            else
-                                MaterialTheme.colorScheme.onSurface
-                        )
-                    }
-                }
+                modifier = Modifier.border(
+                    width = 3.dp,
+                    color = MaterialTheme.colorScheme.primary
+                ),
+                colors = TopAppBarDefaults.topAppBarColors(
+                    containerColor = MaterialTheme.colorScheme.background
+                )
             )
+            Box(
+                modifier = Modifier
+                    .fillMaxSize(),
+                contentAlignment = Alignment.Center
+            ) {
+                Text(
+                    "Recipe not found",
+                    style = MaterialTheme.typography.titleMedium,
+                    color = MaterialTheme.colorScheme.outline
+                )
+            }
         }
-    ) { padding ->
+        return
+    }
+
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(MaterialTheme.colorScheme.background)
+    ) {
+        TopAppBar(
+            title = {
+                Text(
+                    recipe.name.uppercase(),
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Black,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+            },
+            navigationIcon = {
+                IconButton(onClick = onBackClick) {
+                    Icon(Icons.Filled.ArrowBack, contentDescription = "Back")
+                }
+            },
+            actions = {
+                IconButton(onClick = { sharedViewModel.toggleFavorite(recipeId) }) {
+                    Icon(
+                        imageVector = if (isFavorite.value.contains(recipeId))
+                            Icons.Default.Favorite
+                        else
+                            Icons.Default.FavoriteBorder,
+                        contentDescription = "Favorite",
+                        tint = if (isFavorite.value.contains(recipeId))
+                            MaterialTheme.colorScheme.error
+                        else
+                            MaterialTheme.colorScheme.outline,
+                        modifier = Modifier.size(28.dp)
+                    )
+                }
+            },
+            modifier = Modifier.border(
+                width = 3.dp,
+                color = MaterialTheme.colorScheme.primary
+            ),
+            colors = TopAppBarDefaults.topAppBarColors(
+                containerColor = MaterialTheme.colorScheme.background
+            )
+        )
+
         RecipeDetailContent(
             recipe = recipe,
-            viewModel = viewModel,
+            detailViewModel = detailViewModel,
+            sharedViewModel = sharedViewModel,
             recipeId = recipeId,
-            modifier = Modifier.padding(padding)
+            modifier = Modifier.fillMaxSize()
         )
     }
 }
@@ -122,18 +154,14 @@ fun RecipeDetailScreen(
 @Composable
 fun RecipeDetailContent(
     recipe: Recipe,
-    viewModel: RecipeViewModel,
+    detailViewModel: RecipeDetailViewModel,
+    sharedViewModel: SharedViewModel,
     recipeId: String,
     modifier: Modifier = Modifier
 ) {
-    val cleanedIngredients = recipe.ingredientList
-        .map(::cleanRecipeText)
-        .filter { it.isNotBlank() }
-
-    val cleanedSteps = recipe.instructionList
-        .map(::cleanRecipeText)
-        .map { it.replace(Regex("^\\d+[.)]\\s*"), "") }
-        .filter { it.isNotBlank() }
+    val isFavorite = sharedViewModel.favoriteRecipes.collectAsState()
+    val cleanedIngredients = detailViewModel.getCleanedIngredients()
+    val cleanedSteps = detailViewModel.getCleanedSteps()
 
     LazyColumn(
         modifier = modifier.fillMaxSize(),
@@ -197,9 +225,9 @@ fun RecipeDetailContent(
                             )
                     )
 
-                    // Favorite Button (Top Right) - IMPROVED
+                    // Favorite Button (Top Right)
                     IconButton(
-                        onClick = { viewModel.toggleFavorite(recipeId) },
+                        onClick = { sharedViewModel.toggleFavorite(recipeId) },
                         modifier = Modifier
                             .align(Alignment.TopEnd)
                             .padding(16.dp)
@@ -209,12 +237,12 @@ fun RecipeDetailContent(
                             )
                     ) {
                         Icon(
-                            imageVector = if (viewModel.isFavorite(recipeId))
+                            imageVector = if (isFavorite.value.contains(recipeId))
                                 Icons.Default.Favorite
                             else
                                 Icons.Default.FavoriteBorder,
                             contentDescription = "Favorite",
-                            tint = if (viewModel.isFavorite(recipeId))
+                            tint = if (isFavorite.value.contains(recipeId))
                                 MaterialTheme.colorScheme.error
                             else
                                 MaterialTheme.colorScheme.outline,
@@ -225,63 +253,84 @@ fun RecipeDetailContent(
             }
         }
 
-        // Recipe Title & Category - IMPROVED
+        // Recipe Title & Category - BAUHAUS STYLE
         item {
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(20.dp),
+                    .padding(16.dp)
+                    .border(2.dp, MaterialTheme.colorScheme.primary)
+                    .background(Color.White)
+                    .padding(16.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-                // Title - much larger
+                // Title
                 Text(
-                    text = recipe.name,
+                    text = recipe.name.uppercase(),
                     style = MaterialTheme.typography.headlineSmall,
-                    fontWeight = FontWeight.Bold,
-                    fontSize = 28.sp
+                    fontWeight = FontWeight.Black,
+                    fontSize = 24.sp,
+                    color = MaterialTheme.colorScheme.primary
                 )
 
-                // Category Badge - with background
+                // Category Badge - BAUHAUS
                 Surface(
-                    shape = RoundedCornerShape(8.dp),
-                    color = MaterialTheme.colorScheme.primaryContainer
+                    shape = RoundedCornerShape(0.dp),
+                    color = MaterialTheme.colorScheme.primaryContainer,
+                    modifier = Modifier.border(2.dp, MaterialTheme.colorScheme.primary)
                 ) {
                     Text(
                         text = "📁 ${recipe.category}",
-                        style = MaterialTheme.typography.labelMedium,
-                        modifier = Modifier.padding(8.dp, 6.dp),
-                        color = MaterialTheme.colorScheme.onPrimaryContainer,
-                        fontWeight = FontWeight.SemiBold
+                        style = MaterialTheme.typography.labelLarge,
+                        modifier = Modifier.padding(10.dp, 6.dp),
+                        color = MaterialTheme.colorScheme.primary,
+                        fontWeight = FontWeight.Bold
                     )
                 }
 
-                // Stats Row
+                // Stats Row - BAUHAUS
                 Row(
-                    modifier = Modifier.fillMaxWidth(),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .border(1.dp, MaterialTheme.colorScheme.primaryContainer)
+                        .background(MaterialTheme.colorScheme.background)
+                        .padding(12.dp),
                     horizontalArrangement = Arrangement.spacedBy(16.dp)
                 ) {
                     if (recipe.totalSteps != null) {
-                        Row(
-                            horizontalArrangement = Arrangement.spacedBy(4.dp),
-                            verticalAlignment = Alignment.CenterVertically
+                        Column(
+                            horizontalAlignment = Alignment.CenterHorizontally
                         ) {
-                            Text("⏱️", fontSize = 18.sp)
+                            Text("⏱️", fontSize = 20.sp)
                             Text(
-                                text = "${recipe.totalSteps} steps",
-                                style = MaterialTheme.typography.labelMedium
+                                text = "${recipe.totalSteps}",
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.primary
+                            )
+                            Text(
+                                text = "STEPS",
+                                style = MaterialTheme.typography.labelSmall,
+                                fontWeight = FontWeight.Bold
                             )
                         }
                     }
 
                     if (recipe.totalIngredients != null) {
-                        Row(
-                            horizontalArrangement = Arrangement.spacedBy(4.dp),
-                            verticalAlignment = Alignment.CenterVertically
+                        Column(
+                            horizontalAlignment = Alignment.CenterHorizontally
                         ) {
-                            Text("🥘", fontSize = 18.sp)
+                            Text("🥘", fontSize = 20.sp)
                             Text(
-                                text = "${recipe.totalIngredients} ingredients",
-                                style = MaterialTheme.typography.labelMedium
+                                text = "${recipe.totalIngredients}",
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.primary
+                            )
+                            Text(
+                                text = "INGREDIENTS",
+                                style = MaterialTheme.typography.labelSmall,
+                                fontWeight = FontWeight.Bold
                             )
                         }
                     }
@@ -289,82 +338,98 @@ fun RecipeDetailContent(
             }
         }
 
-        // Ingredients Section
+        // Ingredients Section - BAUHAUS
         item {
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(20.dp),
-                verticalArrangement = Arrangement.spacedBy(12.dp)
+                    .padding(16.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 Text(
-                    text = "Ingredients",
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold
+                    text = "INGREDIENTS",
+                    style = MaterialTheme.typography.headlineSmall,
+                    fontWeight = FontWeight.Black,
+                    color = MaterialTheme.colorScheme.primary
                 )
-
-                HorizontalDivider()
+                Spacer(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(2.dp)
+                        .background(MaterialTheme.colorScheme.primary)
+                )
             }
         }
 
         // Ingredient Items
         items(cleanedIngredients.size) { index ->
-            Row(
+            Surface(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 20.dp, vertical = 8.dp),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                verticalAlignment = Alignment.Top
+                    .padding(horizontal = 16.dp, vertical = 4.dp)
+                    .border(1.dp, MaterialTheme.colorScheme.primaryContainer),
+                color = Color.White,
+                shape = RoundedCornerShape(0.dp)
             ) {
-                Text(
-                    text = "${index + 1}.",
-                    style = MaterialTheme.typography.bodyMedium,
-                    fontWeight = FontWeight.SemiBold,
-                    color = MaterialTheme.colorScheme.primary
-                )
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(12.dp),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    verticalAlignment = Alignment.Top
+                ) {
+                    Text(
+                        text = "${index + 1}.",
+                        style = MaterialTheme.typography.labelLarge,
+                        fontWeight = FontWeight.Black,
+                        color = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.width(24.dp)
+                    )
 
-                Text(
-                    text = cleanedIngredients[index],
-                    style = MaterialTheme.typography.bodyMedium,
-                    fontWeight = FontWeight.Medium,
-                    maxLines = 3,
-                    overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.weight(1f)
-                )
-            }
-
-            if (index < cleanedIngredients.size - 1) {
-                HorizontalDivider(modifier = Modifier.padding(horizontal = 20.dp, vertical = 4.dp))
+                    Text(
+                        text = cleanedIngredients[index],
+                        style = MaterialTheme.typography.bodyMedium,
+                        fontWeight = FontWeight.Medium,
+                        maxLines = 3,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f)
+                    )
+                }
             }
         }
 
-        // Steps Section
+        // Steps Section - BAUHAUS
         item {
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(20.dp),
-                verticalArrangement = Arrangement.spacedBy(12.dp)
+                    .padding(16.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 Text(
-                    text = "Steps (${cleanedSteps.size})",
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold
+                    text = "STEPS (${cleanedSteps.size})",
+                    style = MaterialTheme.typography.headlineSmall,
+                    fontWeight = FontWeight.Black,
+                    color = MaterialTheme.colorScheme.primary
+                )
+                Spacer(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(2.dp)
+                        .background(MaterialTheme.colorScheme.primary)
                 )
             }
         }
 
-        // Step Items
+        // Step Items - BAUHAUS
         items(cleanedSteps.size) { index ->
-            Card(
+            Surface(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 16.dp),
-                shape = RoundedCornerShape(12.dp),
-                elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
-                colors = CardDefaults.cardColors(
-                    containerColor = MaterialTheme.colorScheme.surface
-                )
+                    .padding(horizontal = 16.dp, vertical = 6.dp)
+                    .border(2.dp, MaterialTheme.colorScheme.primary),
+                color = Color.White,
+                shape = RoundedCornerShape(0.dp)
             ) {
                 Row(
                     modifier = Modifier
@@ -373,8 +438,10 @@ fun RecipeDetailContent(
                     horizontalArrangement = Arrangement.spacedBy(16.dp)
                 ) {
                     Surface(
-                        modifier = Modifier.size(40.dp),
-                        shape = CircleShape,
+                        modifier = Modifier
+                            .size(48.dp)
+                            .border(2.dp, MaterialTheme.colorScheme.primary),
+                        shape = RoundedCornerShape(0.dp),
                         color = MaterialTheme.colorScheme.primary
                     ) {
                         Box(
@@ -383,10 +450,10 @@ fun RecipeDetailContent(
                         ) {
                             Text(
                                 text = (index + 1).toString(),
-                                style = MaterialTheme.typography.labelLarge,
-                                fontWeight = FontWeight.Bold,
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.Black,
                                 color = MaterialTheme.colorScheme.onPrimary,
-                                fontSize = 18.sp
+                                fontSize = 20.sp
                             )
                         }
                     }
@@ -396,7 +463,6 @@ fun RecipeDetailContent(
                         style = MaterialTheme.typography.bodyMedium,
                         modifier = Modifier.weight(1f),
                         lineHeight = 1.5.em,
-                        maxLines = Int.MAX_VALUE,
                         overflow = TextOverflow.Clip
                     )
                 }

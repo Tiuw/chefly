@@ -1,6 +1,8 @@
 package com.skripsi.chefly.ui.screens
 
 import android.util.Log
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -16,171 +18,75 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.compose.foundation.lazy.items
 import coil.compose.AsyncImage
 import com.skripsi.chefly.data.Recipe
-import com.skripsi.chefly.data.repository.RecipeRepository
-import com.skripsi.chefly.ui.RecipeViewModel
+import com.skripsi.chefly.ui.viewmodel.HomeViewModel
+import com.skripsi.chefly.ui.viewmodel.SharedViewModel
 import androidx.compose.ui.platform.LocalContext
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun HomeScreen(
-    viewModel: RecipeViewModel,
-    resetSearchTrigger: Int = 0,
+    sharedViewModel: SharedViewModel,
     onRecipeClick: (String) -> Unit
 ) {
     val context = LocalContext.current
+    val homeViewModel: HomeViewModel = viewModel()
     val scope = rememberCoroutineScope()
 
-    var totalRecipes by remember { mutableStateOf(0) }
-    var paginatedRecipes by remember { mutableStateOf<List<Recipe>>(emptyList()) }
-    var filteredRecipesState by remember { mutableStateOf<List<Recipe>>(emptyList()) }
-    var currentPage by remember { mutableStateOf(0) }
-    var isLoadingMore by remember { mutableStateOf(false) }
-    var isInitialLoading by remember { mutableStateOf(true) }
-    var loadError by remember { mutableStateOf<String?>(null) }
-    var searchQuery by remember { mutableStateOf("") }
-    var isSearching by remember { mutableStateOf(false) }
-    var lastSearchQuery by remember { mutableStateOf("") }
-    var lastIngredientSearchList by remember { mutableStateOf<List<String>>(emptyList()) }
-    val allSelectedIngredients = viewModel.getAllSelectedIngredients()
+    // State from ViewModels
+    val totalRecipes by homeViewModel.totalRecipes.collectAsState()
+    val paginatedRecipes by homeViewModel.paginatedRecipes.collectAsState()
+    val filteredRecipes by homeViewModel.filteredRecipes.collectAsState()
+    val isLoadingMore by homeViewModel.isLoadingMore.collectAsState()
+    val isInitialLoading by homeViewModel.isInitialLoading.collectAsState()
+    val loadError by homeViewModel.loadError.collectAsState()
+    val searchQuery by homeViewModel.searchQuery.collectAsState()
+    val isSearching by homeViewModel.isSearching.collectAsState()
+    val matchingIngredientsCache by homeViewModel.matchingIngredientsCache.collectAsState()
+
+    val allSelectedIngredients by sharedViewModel.allSelectedIngredients.collectAsState()
+    val favorites by sharedViewModel.favoriteRecipes.collectAsState()
 
     val lazyListState = rememberLazyListState()
+    var isScrolledDown by remember { mutableStateOf(false) }
 
-    // Initial load
+    // Initialize on mount
     LaunchedEffect(Unit) {
-        try {
-            isInitialLoading = true
-            RecipeRepository.init(context)
-            totalRecipes = RecipeRepository.getRecipeCount(context)
-            loadError = null
-        } catch (e: Exception) {
-            loadError = "Failed to load"
-        } finally {
-            isInitialLoading = false
-        }
+        homeViewModel.initializeHomeScreen(context)
     }
 
-    // Load first page
+    // Load first page after initialization
     LaunchedEffect(isInitialLoading, totalRecipes) {
         if (!isInitialLoading && totalRecipes > 0 && paginatedRecipes.isEmpty()) {
-            try {
-                isLoadingMore = true
-                val recipes = RecipeRepository.getRecipesPaged(context, 0)
-                paginatedRecipes = recipes
-                currentPage = 1
-                filteredRecipesState = recipes
-                lastIngredientSearchList = emptyList()  // Reset to trigger auto-search if have ingredients
-            } catch (e: Exception) {
-                loadError = "Error loading recipes"
-            } finally {
-                isLoadingMore = false
-            }
+            homeViewModel.loadFirstPage(context)
         }
     }
 
-    // IMPORTANT: Check if we need to auto-search on mount with selected ingredients
-    LaunchedEffect(Unit) {
-        if (allSelectedIngredients.isNotEmpty() && 
-            paginatedRecipes.isNotEmpty() &&
-            lastIngredientSearchList.isEmpty()) {  // Only if not yet searched
-            lastIngredientSearchList = allSelectedIngredients
-            try {
-                isSearching = true
-                val results = RecipeRepository.searchRecipesByIngredientsSusp(
-                    context,
-                    allSelectedIngredients
-                )
-                filteredRecipesState = results
-                lastSearchQuery = "ingredient_search"
-                isSearching = false
-            } catch (e: Exception) {
-                loadError = "Error searching recipes"
-                isSearching = false
-            }
+    // Auto-search by ingredients when they change
+    LaunchedEffect(paginatedRecipes, allSelectedIngredients) {
+        if (paginatedRecipes.isNotEmpty() && allSelectedIngredients.isNotEmpty()) {
+            homeViewModel.searchByIngredients(context, allSelectedIngredients)
         }
     }
 
-    // Infinite scroll detection
-    LaunchedEffect(lazyListState) {
-        snapshotFlow { lazyListState.layoutInfo.visibleItemsInfo }
-            .collect { visibleItems ->
-                if (visibleItems.isNotEmpty() && !isSearching) {
-                    val lastVisibleItem = visibleItems.last()
-                    val totalItems = lazyListState.layoutInfo.totalItemsCount
-
-                    if (lastVisibleItem.index >= totalItems - 3 && !isLoadingMore && searchQuery.isEmpty() && allSelectedIngredients.isEmpty()) {
-                        val estimatedTotal = totalRecipes
-                        if (paginatedRecipes.size < estimatedTotal) {
-                            scope.launch {
-                                try {
-                                    isLoadingMore = true
-                                    val nextRecipes = RecipeRepository.getRecipesPaged(context, currentPage)
-                                    if (nextRecipes.isNotEmpty()) {
-                                        paginatedRecipes = paginatedRecipes + nextRecipes
-                                        currentPage++
-                                    }
-                                } catch (e: Exception) {
-                                    loadError = "Error loading more"
-                                } finally {
-                                    isLoadingMore = false
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-    }
-
-    // Search with debounce - IMPROVED with longer delay and proper cancellation
-    LaunchedEffect(searchQuery) {
-        if (searchQuery != lastSearchQuery) {
-            delay(800)  // Increased from 500ms to 800ms
-            isSearching = true
-            try {
-                lastSearchQuery = searchQuery
-                if (searchQuery.isEmpty()) {
-                    filteredRecipesState = paginatedRecipes
-                    isSearching = false
-                } else {
-                    val results = RecipeRepository.searchRecipesByQuery(context, searchQuery)
-                    filteredRecipesState = results
-                    isSearching = false
-                }
-            } catch (e: Exception) {
-                isSearching = false
-            }
+    // Precompute matching ingredients cache
+    LaunchedEffect(filteredRecipes, allSelectedIngredients) {
+        if (filteredRecipes.isNotEmpty() && allSelectedIngredients.isNotEmpty()) {
+            homeViewModel.precomputeMatchingIngredients(context, filteredRecipes, allSelectedIngredients)
         }
     }
 
-    // Reset search state when caller requests (e.g., back from detail screen)
-    LaunchedEffect(resetSearchTrigger) {
-        if (resetSearchTrigger > 0) {
-            searchQuery = ""
-            lastSearchQuery = ""
-            isSearching = false
-            filteredRecipesState = paginatedRecipes
-        }
-    }
-
-
-    val displayedRecipes = remember(filteredRecipesState) {
-        filteredRecipesState.mapNotNull { r -> r.id?.let { id -> r to id } }
-    }
-
-    var isScrolledDown by remember { mutableStateOf(false) }
-    var matchingIngredientsCache by remember { mutableStateOf<Map<String, Pair<Int, Int>>>(emptyMap()) }
-    var cacheComputationInProgress by remember { mutableStateOf(false) }
-    var hasInitializedSearch by remember { mutableStateOf(false) }
-
-    // Detect scroll position for FAB visibility
+    // Detect scroll position
     LaunchedEffect(lazyListState) {
         snapshotFlow { lazyListState.firstVisibleItemIndex }
             .collect { firstVisibleIndex ->
@@ -188,274 +94,156 @@ fun HomeScreen(
             }
     }
 
-    // Pre-compute matching ingredients for all recipes - ENSURE it runs even when back
-    LaunchedEffect(Unit) {
-        snapshotFlow { Pair(filteredRecipesState, allSelectedIngredients) }
-            .collect { (recipes, ingredients) ->
-                if (ingredients.isNotEmpty() && recipes.isNotEmpty()) {
-                    cacheComputationInProgress = true
-                    scope.launch {
-                        try {
-                            val cache = mutableMapOf<String, Pair<Int, Int>>()
-                            recipes.forEach { recipe ->
-                                recipe.id?.let { id ->
-                                    val matchInfo = RecipeRepository.getMatchingIngredientsCountSuspend(context, id, ingredients)
-                                    if (matchInfo != null) {
-                                        cache[id] = matchInfo
-                                    }
-                                }
-                            }
-                            matchingIngredientsCache = cache
-                            cacheComputationInProgress = false
-                        } catch (e: Exception) {
-                            Log.e("HomeScreen", "Error computing matching ingredients", e)
-                            cacheComputationInProgress = false
+    // Infinite scroll trigger
+    LaunchedEffect(lazyListState) {
+        snapshotFlow { lazyListState.layoutInfo.visibleItemsInfo }
+            .collect { visibleItems ->
+                if (visibleItems.isNotEmpty() && !isSearching) {
+                    val lastVisibleItem = visibleItems.last()
+                    val totalItems = lazyListState.layoutInfo.totalItemsCount
+
+                    if (lastVisibleItem.index >= totalItems - 3 && !isLoadingMore &&
+                        searchQuery.isEmpty() && allSelectedIngredients.isEmpty()) {
+                        if (paginatedRecipes.size < totalRecipes) {
+                            homeViewModel.loadMoreRecipes(context)
                         }
                     }
-                } else {
-                    matchingIngredientsCache = emptyMap()
-                    cacheComputationInProgress = false
                 }
             }
     }
 
-    // Auto-search when ingredients are selected (e.g., from Fridge screen)
-    // IMPORTANT: Proper dependency tracking with proper tie-breaking
-    LaunchedEffect(paginatedRecipes, allSelectedIngredients) {
-        if (paginatedRecipes.isNotEmpty() && 
-            allSelectedIngredients.isNotEmpty() && 
-            !isInitialLoading) {
-            
-            val ingredientListHasChanged = allSelectedIngredients != lastIngredientSearchList || !hasInitializedSearch
-            
-            if (ingredientListHasChanged) {
-                lastIngredientSearchList = allSelectedIngredients
-                hasInitializedSearch = true
-                delay(300)
-                try {
-                    isSearching = true
-                    val results = RecipeRepository.searchRecipesByIngredientsSusp(
-                        context,
-                        allSelectedIngredients
-                    )
-                    filteredRecipesState = results
-                    lastSearchQuery = "ingredient_search"
-                    isSearching = false
-                } catch (e: Exception) {
-                    loadError = "Error searching recipes"
-                    isSearching = false
-                }
-            }
-        }
+    // Search debounce
+    LaunchedEffect(searchQuery) {
+        homeViewModel.searchRecipes(context, searchQuery)
     }
 
-    Box(modifier = Modifier.fillMaxSize()) {
+    Box(modifier = Modifier
+        .fillMaxSize()
+        .background(MaterialTheme.colorScheme.background)) {
         Column(modifier = Modifier.fillMaxSize()) {
-        // Search bar - IMPROVED
-        TextField(
-            value = searchQuery,
-            onValueChange = { searchQuery = it },
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 12.dp)
-                .height(48.dp),
-            placeholder = { Text("Cari resep, bahan...") },
-            leadingIcon = {
-                Icon(
-                    Icons.Default.Search,
-                    contentDescription = "Search",
-                    modifier = Modifier.size(24.dp)
-                )
-            },
-            trailingIcon = {
-                if (searchQuery.isNotEmpty()) {
-                    Icon(
-                        Icons.Default.Close,
-                        contentDescription = "Clear",
-                        modifier = Modifier
-                            .size(24.dp)
-                            .clickable { searchQuery = "" }
-                            .padding(4.dp)
-                    )
-                }
-            },
-            shape = RoundedCornerShape(12.dp),
-            singleLine = true,
-            colors = TextFieldDefaults.colors(
-                focusedContainerColor = MaterialTheme.colorScheme.surface,
-                unfocusedContainerColor = MaterialTheme.colorScheme.surface,
-                focusedIndicatorColor = MaterialTheme.colorScheme.primary,
-                unfocusedIndicatorColor = MaterialTheme.colorScheme.outlineVariant
-            )
-        )
+            // TopAppBar
+            BauhausTopAppBar()
 
-        // Total data loaded info
-        if (!isInitialLoading && totalRecipes > 0) {
-            Text(
-                text = "Total: ${paginatedRecipes.size}/$totalRecipes Resep",
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.outline,
-                modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)
-            )
-        }
-
-        // Main content
-        when {
-            isInitialLoading -> {
-                Box(
-                    modifier = Modifier
-                        .fillMaxSize(),
-                    contentAlignment = Alignment.Center
-                ) {
-                    CircularProgressIndicator(modifier = Modifier.size(40.dp))
-                }
-            }
-            loadError != null && paginatedRecipes.isEmpty() -> {
-                Box(
-                    modifier = Modifier
-                        .fillMaxSize(),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Text("Error: $loadError", color = MaterialTheme.colorScheme.error)
-                }
-            }
-            else -> {
-                LazyColumn(
-                    modifier = Modifier.fillMaxSize(),
-                    state = lazyListState,
-                    contentPadding = PaddingValues(12.dp),
-                    verticalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    // Show selected fridge ingredients at top
-                    if (allSelectedIngredients.isNotEmpty()) {
-                        item {
-                            Card(
-                                modifier = Modifier
-                                    .fillMaxWidth(),
-                                shape = RoundedCornerShape(12.dp),
-                                colors = CardDefaults.cardColors(
-                                    containerColor = MaterialTheme.colorScheme.primaryContainer
-                                ),
-                                elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
-                            ) {
-                                Column(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .padding(12.dp),
-                                    verticalArrangement = Arrangement.spacedBy(8.dp)
-                                ) {
-                                    Text(
-                                        text = "🧊 Your Fridge (${allSelectedIngredients.size})",
-                                        style = MaterialTheme.typography.labelSmall,
-                                        fontWeight = FontWeight.SemiBold,
-                                        color = MaterialTheme.colorScheme.onPrimaryContainer
-                                    )
-                                    Column(
-                                        modifier = Modifier.fillMaxWidth(),
-                                        verticalArrangement = Arrangement.spacedBy(4.dp)
-                                    ) {
-                                        allSelectedIngredients.forEach { ingredient ->
-                                            Text(
-                                                text = "✓ $ingredient",
-                                                style = MaterialTheme.typography.bodySmall,
-                                                color = MaterialTheme.colorScheme.onPrimaryContainer
-                                            )
-                                        }
-                                    }
-
-                                    // Search button for ingredients
-                                    Button(
-                                        onClick = {
-                                            scope.launch {
-                                                try {
-                                                    isSearching = true
-                                                    lastSearchQuery = "ingredient_search"
-                                                    val results = RecipeRepository.searchRecipesByIngredientsSusp(
-                                                        context,
-                                                        allSelectedIngredients
-                                                    )
-                                                    filteredRecipesState = results
-                                                    isSearching = false
-                                                } catch (e: Exception) {
-                                                    loadError = "Error searching recipes"
-                                                    isSearching = false
-                                                }
-                                            }
-                                        },
-                                        modifier = Modifier
-                                            .fillMaxWidth()
-                                            .padding(top = 8.dp),
-                                        colors = ButtonDefaults.buttonColors(
-                                            containerColor = MaterialTheme.colorScheme.primary
-                                        )
-                                    ) {
-                                        Text(
-                                            "🔍 Cari di Resep",
-                                            color = MaterialTheme.colorScheme.onPrimary,
-                                            fontWeight = FontWeight.SemiBold
-                                        )
-                                    }
-                                }
-                            }
-                        }
+            // Main Content
+            when {
+                isInitialLoading -> {
+                    Box(
+                        modifier = Modifier.fillMaxSize(),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        CircularProgressIndicator(modifier = Modifier.size(40.dp))
                     }
-
-                    if (isSearching) {
+                }
+                loadError != null && paginatedRecipes.isEmpty() -> {
+                    Box(
+                        modifier = Modifier.fillMaxSize(),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text("Error: $loadError", color = MaterialTheme.colorScheme.error)
+                    }
+                }
+                else -> {
+                    LazyColumn(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .weight(1f),
+                        state = lazyListState,
+                        contentPadding = PaddingValues(16.dp),
+                        verticalArrangement = Arrangement.spacedBy(16.dp)
+                    ) {
+                        // Hero Section
                         item {
-                            Box(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(32.dp),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                CircularProgressIndicator(modifier = Modifier.size(32.dp))
-                            }
-                        }
-                    } else {
-                        items(displayedRecipes.size) { index ->
-                            val (recipe, id) = displayedRecipes[index]
-                            val matchInfo = if (allSelectedIngredients.isNotEmpty()) {
-                                matchingIngredientsCache[id]  // Use cache instead of computing here
-                            } else {
-                                null
-                            }
-
-                            MinimalRecipeCard(
-                                recipe = recipe,
-                                isFavorite = viewModel.isFavorite(id),
-                                onFavoriteClick = { viewModel.toggleFavorite(id) },
-                                onClick = { onRecipeClick(id) },
-                                matchingIngredients = if (allSelectedIngredients.isNotEmpty()) matchInfo?.first else null,
-                                totalIngredients = if (allSelectedIngredients.isNotEmpty()) matchInfo?.second else null
+                            BauhausHeroSection(
+                                recipesCount = paginatedRecipes.size,
+                                totalRecipes = totalRecipes,
+                                onScanClick = { /* Handle scan click */ }
                             )
                         }
 
-                        if (isLoadingMore && !isSearching) {
+                        // Recently Detected Ingredients
+                        if (allSelectedIngredients.isNotEmpty()) {
                             item {
-                                Box(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .padding(24.dp),
-                                    contentAlignment = Alignment.Center
-                                ) {
-                                    CircularProgressIndicator(modifier = Modifier.size(28.dp))
-                                }
+                                BauhausRecentlyDetected(ingredients = allSelectedIngredients)
                             }
                         }
 
-                        if (displayedRecipes.isEmpty() && !isSearching) {
+                        // Search Bar
+                        item {
+                            BauhausSearchBar(
+                                value = searchQuery,
+                                onValueChange = { homeViewModel.setSearchQuery(it) }
+                            )
+                        }
+
+                        // Total Data Info
+                        if (!isInitialLoading && totalRecipes > 0) {
+                            item {
+                                Text(
+                                    text = "Total: ${paginatedRecipes.size}/$totalRecipes Resep",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.outline,
+                                    modifier = Modifier.padding(horizontal = 8.dp)
+                                )
+                            }
+                        }
+
+                        // Recipes List
+                        if (isSearching) {
                             item {
                                 Box(
                                     modifier = Modifier
                                         .fillMaxWidth()
-                                        .padding(48.dp),
+                                        .padding(32.dp),
                                     contentAlignment = Alignment.Center
                                 ) {
-                                    Text(
-                                        "Resep tidak ditemukan",
-                                        style = MaterialTheme.typography.bodyMedium,
-                                        color = MaterialTheme.colorScheme.outline
-                                    )
+                                    CircularProgressIndicator(modifier = Modifier.size(32.dp))
+                                }
+                            }
+                        } else {
+                            items(filteredRecipes.size) { index ->
+                                val recipe = filteredRecipes[index]
+                                val isFav = recipe.id?.let { favorites.contains(it) } ?: false
+                                val matchInfo = recipe.id?.let { matchingIngredientsCache[it] }
+
+                                MinimalRecipeCard(
+                                    recipe = recipe,
+                                    isFavorite = isFav,
+                                    onFavoriteClick = {
+                                        recipe.id?.let { sharedViewModel.toggleFavorite(it) }
+                                    },
+                                    onClick = { recipe.id?.let { onRecipeClick(it) } },
+                                    matchingIngredients = if (allSelectedIngredients.isNotEmpty()) matchInfo?.first else null,
+                                    totalIngredients = if (allSelectedIngredients.isNotEmpty()) matchInfo?.second else null
+                                )
+                            }
+
+                            if (isLoadingMore && !isSearching) {
+                                item {
+                                    Box(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .padding(24.dp),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        CircularProgressIndicator(modifier = Modifier.size(28.dp))
+                                    }
+                                }
+                            }
+
+                            if (filteredRecipes.isEmpty() && !isSearching) {
+                                item {
+                                    Box(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .padding(48.dp),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Text(
+                                            "Resep tidak ditemukan",
+                                            style = MaterialTheme.typography.bodyMedium,
+                                            color = MaterialTheme.colorScheme.outline
+                                        )
+                                    }
                                 }
                             }
                         }
@@ -463,28 +251,14 @@ fun HomeScreen(
                 }
             }
         }
-        }
 
-        // Floating Action Button for ingredient search
+        // FAB for ingredient search
         if (allSelectedIngredients.isNotEmpty() && isScrolledDown && searchQuery.isEmpty()) {
             FloatingActionButton(
                 onClick = {
                     scope.launch {
-                        try {
-                            isSearching = true
-                            lastSearchQuery = "ingredient_search"
-                            val results = RecipeRepository.searchRecipesByIngredientsSusp(
-                                context,
-                                allSelectedIngredients
-                            )
-                            filteredRecipesState = results
-                            isSearching = false
-                            // Scroll to top to show results
-                            lazyListState.animateScrollToItem(0)
-                        } catch (e: Exception) {
-                            loadError = "Error searching recipes"
-                            isSearching = false
-                        }
+                        homeViewModel.searchByIngredients(context, allSelectedIngredients)
+                        lazyListState.animateScrollToItem(0)
                     }
                 },
                 modifier = Modifier
@@ -594,5 +368,201 @@ fun MinimalRecipeCard(
                 )
             }
         }
+    }
+}
+
+/**
+ * Bauhaus styled TopAppBar
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun BauhausTopAppBar() {
+    TopAppBar(
+        title = {
+            Text(
+                "CHEFLY",
+                style = MaterialTheme.typography.displaySmall,
+                fontWeight = FontWeight.Black,
+                modifier = Modifier.width(100.dp)
+            )
+        },
+        modifier = Modifier.border(
+            width = 4.dp,
+            color = MaterialTheme.colorScheme.primary
+        ),
+        colors = TopAppBarDefaults.topAppBarColors(
+            containerColor = MaterialTheme.colorScheme.background
+        )
+    )
+}
+
+/**
+ * Bauhaus Hero Section - "WHAT'S IN YOUR FRIDGE?"
+ */
+@Composable
+fun BauhausHeroSection(
+    recipesCount: Int,
+    totalRecipes: Int,
+    onScanClick: () -> Unit
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(
+                color = MaterialTheme.colorScheme.primaryContainer,
+                shape = RoundedCornerShape(0.dp)
+            )
+            .border(4.dp, MaterialTheme.colorScheme.primary)
+            .padding(24.dp),
+        verticalArrangement = Arrangement.spacedBy(16.dp)
+    ) {
+        Text(
+            "WHAT'S IN YOUR\nFRIDGE?",
+            style = MaterialTheme.typography.displayMedium,
+            fontWeight = FontWeight.Black,
+            color = MaterialTheme.colorScheme.primary
+        )
+
+        Text(
+            "Scan ingredients, get recipes instantly. The Bauhaus way of cooking starts with raw simplicity.",
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.primary
+        )
+
+        Button(
+            onClick = onScanClick,
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(56.dp)
+                .border(4.dp, MaterialTheme.colorScheme.primary),
+            colors = ButtonDefaults.buttonColors(
+                containerColor = MaterialTheme.colorScheme.primary
+            ),
+            shape = RoundedCornerShape(0.dp)
+        ) {
+            Text(
+                "START SCAN",
+                style = MaterialTheme.typography.titleLarge,
+                fontWeight = FontWeight.Black,
+                color = MaterialTheme.colorScheme.onPrimary
+            )
+        }
+    }
+}
+
+/**
+ * Recently Detected Ingredients Display
+ */
+@Composable
+fun BauhausRecentlyDetected(ingredients: List<String>) {
+    Column(
+        modifier = Modifier.fillMaxWidth(),
+        verticalArrangement = Arrangement.spacedBy(12.dp)
+    ) {
+        Text(
+            "RECENTLY DETECTED",
+            style = MaterialTheme.typography.headlineSmall,
+            fontWeight = FontWeight.Black,
+            color = MaterialTheme.colorScheme.primary
+        )
+
+        Spacer(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(1.dp)
+                .background(MaterialTheme.colorScheme.primary)
+        )
+
+        Flow(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            ingredients.forEach { ingredient ->
+                Surface(
+                    modifier = Modifier
+                        .border(2.dp, MaterialTheme.colorScheme.primary),
+                    color = Color.White
+                ) {
+                    Text(
+                        ingredient.uppercase(),
+                        style = MaterialTheme.typography.labelMedium,
+                        fontWeight = FontWeight.Bold,
+                        modifier = Modifier.padding(8.dp, 4.dp),
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                }
+            }
+        }
+    }
+}
+
+/**
+ * Bauhaus Search Bar
+ */
+@Composable
+fun BauhausSearchBar(
+    value: String,
+    onValueChange: (String) -> Unit
+) {
+    OutlinedTextField(
+        value = value,
+        onValueChange = onValueChange,
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(56.dp)
+            .border(4.dp, MaterialTheme.colorScheme.primary),
+        placeholder = {
+            Text(
+                "SEARCH FOR RECIPES, INGREDIENTS...",
+                style = MaterialTheme.typography.labelMedium
+            )
+        },
+        leadingIcon = {
+            Icon(
+                Icons.Default.Search,
+                contentDescription = "Search",
+                modifier = Modifier.size(20.dp)
+            )
+        },
+        trailingIcon = {
+            if (value.isNotEmpty()) {
+                Icon(
+                    Icons.Default.Close,
+                    contentDescription = "Clear",
+                    modifier = Modifier
+                        .size(20.dp)
+                        .clickable { onValueChange("") }
+                )
+            }
+        },
+        shape = RoundedCornerShape(0.dp),
+        colors = OutlinedTextFieldDefaults.colors(
+            focusedBorderColor = Color.Transparent,
+            unfocusedBorderColor = Color.Transparent,
+            focusedContainerColor = Color.White,
+            unfocusedContainerColor = Color.White
+        ),
+        singleLine = true,
+        textStyle = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold)
+    )
+}
+
+/**
+ * Simple Flow Layout Composable (since Compose doesn't have native Flow)
+ */
+@Composable
+fun Flow(
+    modifier: Modifier = Modifier,
+    horizontalArrangement: Arrangement.Horizontal = Arrangement.Start,
+    verticalArrangement: Arrangement.Vertical = Arrangement.Top,
+    content: @Composable () -> Unit
+) {
+    Row(
+        modifier = modifier,
+        horizontalArrangement = horizontalArrangement,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        content()
     }
 }
