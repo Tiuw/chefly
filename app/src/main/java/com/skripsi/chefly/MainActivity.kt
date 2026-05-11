@@ -98,7 +98,7 @@ fun CheflyApp() {
                         onClick = {
                             currentDestination = AppDestinations.FAVORITES
                             navController.navigate(Screen.Favorites.route) {
-                                popUpTo(Screen.Home.route)
+                                        launchSingleTop = true
                             }
                         }
                     )
@@ -139,7 +139,7 @@ fun CheflyApp() {
                         onClick = {
                             currentDestination = AppDestinations.FRIDGE
                             navController.navigate(Screen.Fridge.route) {
-                                popUpTo(Screen.Home.route)
+                                launchSingleTop = true
                             }
                         }
                     )
@@ -152,7 +152,7 @@ fun CheflyApp() {
                         onClick = {
                             currentDestination = AppDestinations.PROFILE
                             navController.navigate(Screen.Profile.route) {
-                                popUpTo(Screen.Home.route)
+                                launchSingleTop = true
                             }
                         }
                     )
@@ -169,6 +169,12 @@ fun CheflyApp() {
                 currentDestination = AppDestinations.HOME
                 HomeScreen(
                     sharedViewModel = sharedViewModel,
+                    onScanClick = {
+                        currentDestination = AppDestinations.CAMERA
+                        navController.navigate(Screen.Camera.route) {
+                            launchSingleTop = true
+                        }
+                    },
                     onRecipeClick = { recipeId ->
                         navController.navigate(Screen.RecipeDetail.createRoute(recipeId))
                     }

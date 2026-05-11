@@ -5,7 +5,6 @@ import android.util.Log
 import com.skripsi.chefly.data.Recipe
 import com.skripsi.chefly.data.local.AppDatabase
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withContext
 import java.util.concurrent.ConcurrentHashMap
 
@@ -15,7 +14,10 @@ import java.util.concurrent.ConcurrentHashMap
  */
 object RecipeRepository {
     private var initialized = false
+    private var cacheWarm = false
     private val recipeTokenMap: MutableMap<String, Set<String>> = ConcurrentHashMap()
+    private val recipeIngredientTokenMap: MutableMap<String, Set<String>> = ConcurrentHashMap()
+    private val cachedRecipeById: MutableMap<String, Recipe> = ConcurrentHashMap()
     private var cachedAllRecipes: List<Recipe>? = null  // Cache untuk all recipes
     private val TAG = "RecipeRepository"
     private const val PAGE_SIZE = 30 // Load 30 recipes per page
@@ -25,16 +27,22 @@ object RecipeRepository {
     private fun getDao(context: Context) = getDb(context).recipeDao()
 
     // Ensure DB instance is created. Room will copy the prepackaged DB from assets.
-    fun init(context: Context) {
-        if (initialized) return
+    suspend fun init(context: Context) = withContext(Dispatchers.IO) {
+        if (initialized) return@withContext
         try {
             // Touch DB to trigger createFromAsset copy if needed
-            runBlocking { getDao(context).getAllOnceCount() }
+            getDao(context).getAllOnceCount()
             Log.d(TAG, "RecipeRepository initialized successfully")
             initialized = true
         } catch (e: Exception) {
             Log.e(TAG, "Failed to initialize RecipeRepository: ${e.message}")
         }
+    }
+
+    suspend fun preloadAllRecipes(context: Context) = withContext(Dispatchers.IO) {
+        if (cacheWarm) return@withContext
+        getAllRecipesSuspend(context)
+        cacheWarm = true
     }
 
     /**
@@ -67,9 +75,42 @@ object RecipeRepository {
         }
     }
 
-    fun getAllRecipes(context: Context): List<Recipe> = runBlocking {
-        val entities = getDao(context).getAllOnceList()
-        entities.map { it.toRecipe() }
+    suspend fun getRecommendedRecipes(context: Context, limit: Int = PAGE_SIZE): List<Recipe> =
+        withContext(Dispatchers.IO) {
+            try {
+                getDao(context).getRecommendedRecipes(limit).map { it.toRecipe() }
+            } catch (e: Exception) {
+                Log.e(TAG, "Error loading recommended recipes: ${e.message}")
+                emptyList()
+            }
+        }
+
+    suspend fun getRecipesByCategory(context: Context, category: String): List<Recipe> =
+        withContext(Dispatchers.IO) {
+            val q = category.trim()
+            if (q.isBlank()) return@withContext emptyList()
+
+            try {
+                val startedAt = System.currentTimeMillis()
+                val recipes = getDao(context).searchByCategory(q).map { entity ->
+                    val recipe = entity.toRecipe()
+                    recipe.id?.let { id ->
+                        cachedRecipeById[id] = recipe
+                        recipeTokenMap[id] = computeTokensForRecipe(recipe)
+                        recipeIngredientTokenMap[id] = normalizeIngredientTokens(recipe.ingredientList)
+                    }
+                    recipe
+                }
+                Log.d(TAG, "Category search '$q' returned ${recipes.size} recipes in ${System.currentTimeMillis() - startedAt}ms")
+                recipes
+            } catch (e: Exception) {
+                Log.e(TAG, "Error searching recipes by category: ${e.message}")
+                emptyList()
+            }
+        }
+
+    suspend fun getAllRecipes(context: Context): List<Recipe> = withContext(Dispatchers.IO) {
+        getAllRecipesSuspend(context)
     }
 
     // Suspend version with caching for better performance
@@ -81,6 +122,13 @@ object RecipeRepository {
             val entities = getDao(context).getAllOnceList()
             val recipes = entities.map { it.toRecipe() }
             cachedAllRecipes = recipes
+            recipes.forEach { recipe ->
+                recipe.id?.let { id ->
+                    cachedRecipeById[id] = recipe
+                    recipeTokenMap[id] = computeTokensForRecipe(recipe)
+                    recipeIngredientTokenMap[id] = normalizeIngredientTokens(recipe.ingredientList)
+                }
+            }
             recipes
         } catch (e: Exception) {
             Log.e(TAG, "Error getting all recipes: ${e.message}")
@@ -90,6 +138,7 @@ object RecipeRepository {
 
     suspend fun getRecipeById(context: Context, id: String): Recipe? = withContext(Dispatchers.IO) {
         try {
+            cachedRecipeById[id]?.let { return@withContext it }
             getDao(context).getById(id)?.toRecipe()
         } catch (e: Exception) {
             Log.e(TAG, "Error getting recipe by id: ${e.message}")
@@ -99,17 +148,26 @@ object RecipeRepository {
 
     suspend fun searchRecipesByQuery(context: Context, query: String): List<Recipe> =
         withContext(Dispatchers.IO) {
-        if (query.isBlank()) return@withContext getAllRecipesSuspend(context)
-        val q = query.lowercase().trim()
-        val recipes = getAllRecipesSuspend(context)
-        // Switch to Default for the CPU-intensive filtering
-        withContext(Dispatchers.Default) {
-            recipes.filter { recipe ->
-                val nameMatches = recipe.name.lowercase().contains(q)
-                val tokens: Set<String> = recipe.id?.let { recipeTokenMap[it] } ?: computeTokensForRecipe(recipe)
-                val tokenMatches = tokens.any { it.contains(q) }
-                nameMatches || tokenMatches
+        val q = query.trim()
+        if (q.isBlank()) return@withContext getRecipesPaged(context, 0)
+
+        try {
+            val startedAt = System.currentTimeMillis()
+            val entities = getDao(context).searchByKeyword(q)
+            val recipes = entities.map { entity ->
+                val recipe = entity.toRecipe()
+                recipe.id?.let { id ->
+                    cachedRecipeById[id] = recipe
+                    recipeTokenMap[id] = computeTokensForRecipe(recipe)
+                    recipeIngredientTokenMap[id] = normalizeIngredientTokens(recipe.ingredientList)
+                }
+                recipe
             }
+            Log.d(TAG, "Keyword search '$q' returned ${recipes.size} recipes in ${System.currentTimeMillis() - startedAt}ms")
+            recipes
+        } catch (e: Exception) {
+            Log.e(TAG, "Error searching recipes by keyword: ${e.message}")
+            emptyList()
         }
     }
 
@@ -117,17 +175,19 @@ object RecipeRepository {
         withContext(Dispatchers.IO) {
         if (detectedIngredients.isEmpty()) return@withContext emptyList()
         
+        val startedAt = System.currentTimeMillis()
         val recipes = getAllRecipesSuspend(context)
         
         // Switch to Default for the CPU-intensive scoring calculation
-        withContext(Dispatchers.Default) {
+        val results = withContext(Dispatchers.Default) {
             val normalizedDetected = detectedIngredients
                 .flatMap { splitAndNormalizeIngredient(it) }
                 .filter { it.isNotBlank() }
                 .toSet()
 
-            val results = recipes.mapNotNull { recipe ->
-                val recipeTokens = recipe.ingredientList.flatMap { splitAndNormalizeIngredient(it) }.filter { it.isNotBlank() }.toSet()
+            recipes.mapNotNull { recipe ->
+                val recipeTokens = recipe.id?.let { recipeIngredientTokenMap[it] }
+                    ?: normalizeIngredientTokens(recipe.ingredientList)
                 if (recipeTokens.isEmpty()) return@mapNotNull null
 
                 val intersectionSize = normalizedDetected.intersect(recipeTokens).size
@@ -144,30 +204,20 @@ object RecipeRepository {
             }
                 .sortedByDescending { it.second }
                 .map { it.first }
-
-            results
         }
+        Log.d(TAG, "Ingredient search returned ${results.size} recipes in ${System.currentTimeMillis() - startedAt}ms")
+        results
     }
 
-    fun getMatchingIngredientsCount(context: Context, id: String, detectedIngredients: List<String>): Pair<Int, Int>? {
-        val r = runBlocking { getDao(context).getById(id)?.toRecipe() } ?: return null
-        if (detectedIngredients.isEmpty()) return 0 to r.ingredientList.size
-
-        val normalizedDetected = detectedIngredients.flatMap { splitAndNormalizeIngredient(it) }.filter { it.isNotBlank() }.toSet()
-        val recipeTokens = r.ingredientList.flatMap { splitAndNormalizeIngredient(it) }.filter { it.isNotBlank() }.toSet()
-
-        val matched = normalizedDetected.intersect(recipeTokens).size
-        return matched to recipeTokens.size
-    }
 
     // Suspend version for non-blocking computation
     suspend fun getMatchingIngredientsCountSuspend(context: Context, id: String, detectedIngredients: List<String>): Pair<Int, Int>? = 
         withContext(Dispatchers.IO) {
-        val r = getDao(context).getById(id)?.toRecipe() ?: return@withContext null
+        val r = cachedRecipeById[id] ?: getDao(context).getById(id)?.toRecipe() ?: return@withContext null
         if (detectedIngredients.isEmpty()) return@withContext 0 to r.ingredientList.size
 
         val normalizedDetected = detectedIngredients.flatMap { splitAndNormalizeIngredient(it) }.filter { it.isNotBlank() }.toSet()
-        val recipeTokens = r.ingredientList.flatMap { splitAndNormalizeIngredient(it) }.filter { it.isNotBlank() }.toSet()
+        val recipeTokens = recipeIngredientTokenMap[id] ?: normalizeIngredientTokens(r.ingredientList)
 
         val matched = normalizedDetected.intersect(recipeTokens).size
         matched to recipeTokens.size
@@ -198,5 +248,12 @@ object RecipeRepository {
         combined.addAll(nameTokens.split(Regex("\\s+")))
         combined.addAll(ingredientTokens.map { it.lowercase() })
         return combined.filter { it.isNotBlank() }.toSet()
+    }
+
+    private fun normalizeIngredientTokens(items: List<String>): Set<String> {
+        return items
+            .flatMap { splitAndNormalizeIngredient(it) }
+            .filter { it.isNotBlank() }
+            .toSet()
     }
 }

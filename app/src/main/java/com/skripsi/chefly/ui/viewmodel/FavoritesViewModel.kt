@@ -32,7 +32,7 @@ class FavoritesViewModel : ViewModel() {
                 _isLoading.value = true
                 _loadError.value = null
                 RecipeRepository.init(context)
-                
+
                 val recipes = RecipeRepository.getAllRecipes(context)
                 _allRecipes.value = recipes
             } catch (e: Exception) {
