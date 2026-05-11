@@ -13,6 +13,9 @@ val CheflyOnPrimary = Color(0xFFFFFFFF)
 val CheflyPrimaryContainer = Color(0xFFC15230)
 val CheflyOnPrimaryContainer = Color(0xFFFFFFFF)
 
+val WhisperBorder = Color(0xFFF0F0F0)
+val SecondaryText = Color(0xFF5F5E5B)
+
 // Secondary Palette
 val CheflySecondary = Color(0xFF5F5E5B)
 val CheflyOnSecondary = Color(0xFFFFFFFF)

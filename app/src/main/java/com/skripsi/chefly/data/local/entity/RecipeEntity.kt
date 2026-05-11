@@ -2,79 +2,52 @@ package com.skripsi.chefly.data.local.entity
 
 import androidx.room.ColumnInfo
 import androidx.room.Entity
-import androidx.room.Ignore
 import androidx.room.PrimaryKey
 import com.skripsi.chefly.data.Recipe
 
 @Entity(tableName = "recipes")
 data class RecipeEntity(
+    @ColumnInfo(name = "category")
+    val category: String?,
+
     @PrimaryKey
     @ColumnInfo(name = "id")
     val id: String,
 
-    @ColumnInfo(name = "title")
-    val name: String?,
-
     @ColumnInfo(name = "image_url")
     val imageUrl: String?,
 
-    @ColumnInfo(name = "ui_ingredients")
-    val rawIngredients: String?,
+    @ColumnInfo(name = "loves")
+    val loves: Int?,
 
-    @ColumnInfo(name = "ui_steps")
-    val instructions: String?,
+    @ColumnInfo(name = "primary_cooking_method")
+    val primaryCookingMethod: String?,
 
-    @ColumnInfo(name = "category")
-    val category: String?,
+    @ColumnInfo(name = "title")
+    val title: String?,
 
     @ColumnInfo(name = "total_ingredients")
-    val totalIngredients: Int? = null,
+    val totalIngredients: Int?,
 
     @ColumnInfo(name = "total_steps")
-    val totalSteps: Int? = null,
+    val totalSteps: Int?,
 
-    @ColumnInfo(name = "loves")
-    val loves: Int? = null
+    @ColumnInfo(name = "ui_ingredients")
+    val uiIngredients: String?,
+
+    @ColumnInfo(name = "ui_steps")
+    val uiSteps: String?
 ) {
-    // Gunakan @Ignore untuk variabel yang tidak ada di .db
-    @Ignore var ingredientsCleaned: String? = null
-    @Ignore var titleCleaned: String? = null
-
-    fun toRecipe(): Recipe = Recipe(
-        name = name ?: "",
-        rawIngredients = rawIngredients ?: "",
-        instructions = instructions ?: "",
+    fun toDomain(): Recipe = Recipe(
+        id = id,
+        name = title ?: "No Title",
         imageUrl = imageUrl ?: "",
-        category = category ?: "",
-        ingredientsCleaned = ingredientsCleaned,
+        category = category ?: "Uncategorized",
+        ingredients = uiIngredients ?: "",
+        steps = uiSteps ?: "",
         totalIngredients = totalIngredients,
-        loves = loves,
-        titleCleaned = titleCleaned,
         totalSteps = totalSteps,
-        prepTime = null,
-        cookTime = null,
-        servings = null,
-        id = id
+        loves = loves,
+        cookingMethod = primaryCookingMethod
     )
-
-    companion object {
-        fun fromRecipe(r: Recipe): RecipeEntity {
-            val entity = RecipeEntity(
-                id = r.id ?: "",
-                name = r.name,
-                imageUrl = r.imageUrl,
-                rawIngredients = r.rawIngredients,
-                instructions = r.instructions,
-                category = r.category,
-                totalIngredients = r.totalIngredients,
-                totalSteps = r.totalSteps,
-                loves = r.loves
-            )
-            // Isi kembali nilai-nilai yang di-ignore agar datanya tidak hilang
-            entity.ingredientsCleaned = r.ingredientsCleaned
-            entity.titleCleaned = r.titleCleaned
-
-            return entity
-        }
-    }
 }

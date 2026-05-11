@@ -38,7 +38,7 @@ interface RecipeDao {
     )
     suspend fun searchByCategory(category: String): List<RecipeEntity>
 
-    @Query("SELECT * FROM recipes ORDER BY loves DESC, id DESC LIMIT :limit")
+    @Query("SELECT * FROM recipes ORDER BY loves DESC LIMIT :limit")
     suspend fun getRecommendedRecipes(limit: Int): List<RecipeEntity>
 
     @Query("SELECT * FROM recipes WHERE id = :id LIMIT 1")

@@ -59,14 +59,6 @@ class RecipeDetailViewModel : ViewModel() {
             ?: emptyList()
     }
 
-    fun getCleanedSteps(): List<String> {
-        return _recipe.value?.instructionList
-            ?.map { cleanRecipeText(it) }
-            ?.map { it.replace(Regex("^\\d+[.)]\\s*"), "") }
-            ?.filter { it.isNotBlank() }
-            ?: emptyList()
-    }
-
     private fun cleanRecipeText(raw: String): String {
         return raw
             .trim()

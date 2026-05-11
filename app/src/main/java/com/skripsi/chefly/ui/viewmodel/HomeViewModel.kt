@@ -1,17 +1,17 @@
 package com.skripsi.chefly.ui.viewmodel
 
+import android.content.Context
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.skripsi.chefly.data.local.RecipeDao
-import com.skripsi.chefly.data.local.entity.RecipeEntity
+import com.skripsi.chefly.data.repository.RecipeRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
+import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
-// Model UI yang bersih tanpa field waktu
 data class RecipeUiModel(
     val id: String,
     val title: String,
@@ -21,7 +21,7 @@ data class RecipeUiModel(
 
 @HiltViewModel
 class HomeViewModel @Inject constructor(
-    private val recipeDao: RecipeDao
+    @ApplicationContext private val context: Context
 ) : ViewModel() {
 
     private val _suggestedRecipes = MutableStateFlow<List<RecipeUiModel>>(emptyList())
@@ -38,16 +38,25 @@ class HomeViewModel @Inject constructor(
         viewModelScope.launch {
             _isLoading.value = true
             try {
-                val entities = recipeDao.getRecommendedRecipes(limit = 10)
-                _suggestedRecipes.value = entities.map { entity ->
+                RecipeRepository.init(context)
+
+                // Cek jumlah total di DB
+                val total = RecipeRepository.getRecipeCount(context)
+                android.util.Log.d("DEBUG_CHEF", "Total data di DB: $total")
+
+                val recipes = RecipeRepository.getRecommendedRecipes(context, limit = 10)
+                android.util.Log.d("DEBUG_CHEF", "Data yang didapat: ${recipes.size}")
+
+                _suggestedRecipes.value = recipes.map { recipe ->
                     RecipeUiModel(
-                        id = entity.id,
-                        title = entity.name ?: "Tanpa Judul",
-                        imageUrl = entity.imageUrl ?: "",
-                        loves = entity.loves ?: 0,
+                        id = recipe.id,
+                        title = recipe.name,
+                        imageUrl = recipe.imageUrl,
+                        loves = recipe.loves ?: 0
                     )
                 }
             } catch (e: Exception) {
+                android.util.Log.e("DEBUG_CHEF", "Error: ${e.message}")
                 _suggestedRecipes.value = emptyList()
             } finally {
                 _isLoading.value = false
