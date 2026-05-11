@@ -3,82 +3,68 @@ package com.skripsi.chefly.ui.theme
 import androidx.compose.ui.graphics.Color
 
 /**
- * BAUHAUS NEO-BRUTALIST COLOR SYSTEM
- * Bold, geometric, high-contrast kitchen aesthetic
+ * CHEFLY DESIGN SYSTEM COLOR PALETTE
+ * Warm, culinary-inspired, and tech-forward
  */
 
-// ============================================================================
-// PRIMARY COLOR: Deep Black (#1a1a1a)
-// Base for bold typography, borders, and primary UI elements
-// ============================================================================
-val BauhausPrimary = Color(0xFF1a1a1a)           // Deep black - primary brand color
-val BauhausOnPrimary = Color(0xFFFFFFFF)         // White text/icons on black
-val BauhausPrimaryContainer = Color(0xFFffcc00)  // Bold yellow accent container
-val BauhausOnPrimaryContainer = Color(0xFF1a1a1a) // Black text on yellow
+// Primary Palette
+val CheflyPrimary = Color(0xFFA03B1A)
+val CheflyOnPrimary = Color(0xFFFFFFFF)
+val CheflyPrimaryContainer = Color(0xFFC15230)
+val CheflyOnPrimaryContainer = Color(0xFFFFFFFF)
 
-// ============================================================================
-// SECONDARY COLOR: Energy Red (#e63b2e)
-// Action buttons, warnings, and accent elements
-// ============================================================================
-val BauhausSecondary = Color(0xFFe63b2e)         // Bold red for energy
-val BauhausOnSecondary = Color(0xFFFFFFFF)       // White on red
-val BauhausSecondaryContainer = Color(0xFFffc4c0) // Light red background
-val BauhausOnSecondaryContainer = Color(0xFF1a1a1a) // Black on light red
+// Secondary Palette
+val CheflySecondary = Color(0xFF5F5E5B)
+val CheflyOnSecondary = Color(0xFFFFFFFF)
+val CheflySecondaryContainer = Color(0xFFE5E2DD)
+val CheflyOnSecondaryContainer = Color(0xFF656461)
 
-// ============================================================================
-// TERTIARY COLOR: Electric Blue (#0055ff)
-// Information, secondary actions, and interactive elements
-// ============================================================================
-val BauhausTertiary = Color(0xFF0055ff)          // Electric blue
-val BauhausOnTertiary = Color(0xFFFFFFFF)        // White on blue
-val BauhausTertiaryContainer = Color(0xFF99ccff) // Light blue background
-val BauhausOnTertiaryContainer = Color(0xFF1a1a1a) // Black on light blue
+// Tertiary Palette
+val CheflyTertiary = Color(0xFF5D5C5B)
+val CheflyOnTertiary = Color(0xFFFFFFFF)
+val CheflyTertiaryContainer = Color(0xFF757474)
+val CheflyOnTertiaryContainer = Color(0xFFF7FEFF)
 
-// ============================================================================
-// BACKGROUND & SURFACE: Warm Cream (#f5f0e8)
-// Primary background for content areas
-// ============================================================================
-val BauhausBackground = Color(0xFFf5f0e8)        // Warm cream background
-val BauhausSurface = Color(0xFFf5f0e8)           // Surface color (cards, containers)
-val BauhausOnSurface = Color(0xFF1a1a1a)         // Black text on surfaces
-val BauhausSurfaceVariant = Color(0xFFe8e3db)   // Slightly darker surface variant
-val BauhausOnSurfaceVariant = Color(0xFF4a4a4a) // Dark gray text on variants
+// Background & Surface
+val CheflyBackground = Color(0xFFFFF8F6)
+val CheflyOnBackground = Color(0xFF241916)
+val CheflySurface = Color(0xFFFFF8F6)
+val CheflyOnSurface = Color(0xFF241916)
+val CheflySurfaceVariant = Color(0xFFF3DED8)
+val CheflyOnSurfaceVariant = Color(0xFF57423C)
 
-// ============================================================================
-// OUTLINES & BORDERS: Bold geometric borders
-// ============================================================================
-val BauhausOutline = Color(0xFF1a1a1a)           // Black outline borders (4dp)
-val BauhausOutlineVariant = Color(0xFF8b8b8b)   // Gray outline for subtle borders
+// Outlines
+val CheflyOutline = Color(0xFF8A726A)
+val CheflyOutlineVariant = Color(0xFFDEC0B8)
 
-// ============================================================================
-// ERROR & STATUS: Red for errors
-// ============================================================================
-val BauhausError = Color(0xFFb3261e)             // Error red
-val BauhausOnError = Color(0xFFFFFFFF)           // White on error
-val BauhausErrorContainer = Color(0xFFf9dedc)   // Light error background
-val BauhausOnErrorContainer = Color(0xFF410e0b) // Dark error text
+// Error
+val CheflyError = Color(0xFFBA1A1A)
+val CheflyOnError = Color(0xFFFFFFFF)
+val CheflyErrorContainer = Color(0xFFFFDAD6)
+val CheflyOnErrorContainer = Color(0xFF93000A)
 
-// ============================================================================
-// ADDITIONAL BAUHAUS PALETTE: Monochromatic grays for hierarchy
-// ============================================================================
-val BauhausBlack = Color(0xFF1a1a1a)             // Deep black
-val BauhausWhite = Color(0xFFFFFFFF)             // Pure white
-val BauhausGray = Color(0xFF8b8b8b)              // Medium gray
-val BauhausLightGray = Color(0xFFd0d0d0)         // Light gray
-val BauhausYellow = Color(0xFFffcc00)            // Bold yellow accent
+// Additional Brand Colors
+val WarmIvory = Color(0xFFFAF7F2)
+val PureSurface = Color(0xFFFFFFFF)
+val DeepCharcoal = Color(0xFF1A1A1A)
+val MutedSlate = Color(0xFF6B7280)
+val Terracotta = Color(0xFFE36C47)
+val SoftSage = Color(0xFF8FAF9B)
+val AlertAmber = Color(0xFFF59E0B)
+val ErrorCoral = Color(0xFFEF4444)
 
-// ============================================================================
-// LEGACY COLORS (kept for backwards compatibility - consider removing)
-// ============================================================================
-val Purple80 = Color(0xFFD0BCFF)
-val PurpleGrey80 = Color(0xFFCCC2DC)
-val Pink80 = Color(0xFFEFB8C8)
-val Purple40 = Color(0xFF6650a4)
-val PurpleGrey40 = Color(0xFF625b71)
-val Pink40 = Color(0xFF7D5260)
-val OrangeLight = Color(0xFFFFB74D)
-val OrangeDark = Color(0xFFF57C00)
-val GreenLight = Color(0xFF81C784)
-val GreenDark = Color(0xFF4CAF50)
-val CreamLight = Color(0xFFFFF8E1)
-val CreamDark = Color(0xFFFFECB3)
+// M3 Fixed & Variations (from Design System)
+val CheflySurfaceDim = Color(0xFFEAD6D0)
+val CheflySurfaceBright = Color(0xFFFFF8F6)
+val CheflySurfaceContainerLowest = Color(0xFFFFFFFF)
+val CheflySurfaceContainerLow = Color(0xFFFFF1ED)
+val CheflySurfaceContainer = Color(0xFFFFE9E4)
+val CheflySurfaceContainerHigh = Color(0xFFF9E4DE)
+val CheflySurfaceContainerHighest = Color(0xFFF3DED8)
+val CheflyInverseSurface = Color(0xFF3A2E2A)
+val CheflyInverseOnSurface = Color(0xFFFFEDE8)
+val CheflySurfaceTint = Color(0xFFA33D1C)
+val CheflyPrimaryFixed = Color(0xFFFFDBD1)
+val CheflyPrimaryFixedDim = Color(0xFFFFB59F)
+val CheflyOnPrimaryFixed = Color(0xFF3A0A00)
+val CheflyOnPrimaryFixedVariant = Color(0xFF832605)

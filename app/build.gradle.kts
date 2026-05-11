@@ -1,3 +1,5 @@
+import org.gradle.kotlin.dsl.implementation
+
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
@@ -47,6 +49,12 @@ dependencies {
     // use KSP for Room (clean single entry)
     val room_version = "2.8.4"
     ksp("androidx.room:room-compiler:$room_version")
+
+    // icons
+    implementation("androidx.compose.material:material-icons-extended")
+
+    // Tambahkan ini untuk hiltViewModel() di Compose
+    implementation("androidx.hilt:hilt-navigation-compose:1.2.0")
 
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.lifecycle.runtime.ktx)

@@ -1,1051 +1,288 @@
 package com.skripsi.chefly.ui.screens
 
-import android.Manifest
-import android.content.pm.PackageManager
-import android.graphics.Bitmap
-import android.graphics.BitmapFactory
-import android.graphics.ImageFormat
-import android.graphics.Matrix
-import android.graphics.Rect
-import android.util.Log
-import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.contract.ActivityResultContracts
-import androidx.camera.core.*
-import androidx.camera.lifecycle.ProcessCameraProvider
-import androidx.camera.view.PreviewView
-import androidx.compose.animation.*
 import androidx.compose.animation.core.*
-import androidx.compose.foundation.Canvas
-import androidx.compose.foundation.Image
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.lazy.LazyRow
-import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.filled.*
-import androidx.compose.material.icons.outlined.CameraAlt
-import androidx.compose.material.icons.outlined.PhotoLibrary
 import androidx.compose.material3.*
-import androidx.compose.runtime.*
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.rotate
-import androidx.compose.ui.draw.scale
-import androidx.compose.ui.draw.shadow
-import androidx.compose.ui.geometry.CornerRadius
-import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.PathEffect
-import androidx.compose.ui.graphics.StrokeCap
-import androidx.compose.ui.graphics.drawscope.Stroke
-import androidx.compose.ui.graphics.drawscope.rotate
-import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.compose.ui.viewinterop.AndroidView
-import androidx.compose.ui.zIndex
-import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.graphics.asImageBitmap
-import androidx.compose.ui.zIndex
-import androidx.core.content.ContextCompat
-import com.skripsi.chefly.data.model.DetectedIngredient
-import com.skripsi.chefly.ml.YOLOv8sDetector
-import com.skripsi.chefly.ui.RecipeViewModel
-import java.io.ByteArrayOutputStream
-import java.util.concurrent.Executors
-import kotlin.collections.map
-import androidx.exifinterface.media.ExifInterface
-import androidx.lifecycle.LifecycleOwner
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
-import kotlin.random.Random
+import coil.compose.AsyncImage
 
-// Bauhaus color palette for ingredients (based on neo-brutalist design)
-private val ingredientColors = listOf(
-    Color(0xFFe63b2e), // Bauhaus Red
-    Color(0xFF0055ff), // Bauhaus Blue
-    Color(0xFFffcc00), // Bauhaus Yellow
-    Color(0xFFe63b2e), // Red again
-    Color(0xFF0055ff), // Blue again
-    Color(0xFFffcc00), // Yellow again
-    Color(0xFFe63b2e), // Red
-    Color(0xFF0055ff), // Blue
-    Color(0xFFffcc00), // Yellow
-    Color(0xFF1a1a1a), // Black
-)
+// --- Palette Warna ---
+val DeepCharcoal = Color(0xFF1A1A1A)
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun CameraScreen(
-    viewModel: RecipeViewModel,
-    onSearchRecipes: () -> Unit
-) {
-    val context = LocalContext.current
-    var hasPermission by remember {
-        mutableStateOf(
-            ContextCompat.checkSelfPermission(
-                context,
-                Manifest.permission.CAMERA
-            ) == PackageManager.PERMISSION_GRANTED
-        )
-    }
-
-    val launcher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.RequestPermission()
-    ) { isGranted ->
-        hasPermission = isGranted
-    }
-
-    LaunchedEffect(Unit) {
-        if (!hasPermission) {
-            launcher.launch(Manifest.permission.CAMERA)
-        }
-    }
-
-    if (hasPermission) {
-        CameraPreviewScreen(viewModel = viewModel, onSearchRecipes = onSearchRecipes)
-    } else {
-        PermissionDeniedScreen(onRequestPermission = { launcher.launch(Manifest.permission.CAMERA) })
-    }
-}
-
-@Composable
-fun CameraPreviewScreen(
-    viewModel: RecipeViewModel,
-    onSearchRecipes: () -> Unit
-) {
-    val context = LocalContext.current
-    val lifecycleOwner: LifecycleOwner = (context as? LifecycleOwner)
-        ?: throw IllegalStateException("Context is not a LifecycleOwner. Make sure CameraPreviewScreen is called from an Activity/ComponentActivity.")
-    var detections by remember { mutableStateOf<List<DetectedIngredient>>(emptyList()) }
-
-    // Try to load labels from assets/labels.txt; fall back to built-in list
-    val labels = remember {
-        val defaultLabels = listOf(
-            "Ayam","Bawang Merah","Bawang Putih","Bayam","Cabai Hijau","Cabai Merah",
-            "Daging Kambing","Daging Sapi","Daun Bawang","Ikan","Kacang Panjang","Kangkung",
-            "Kol","Nasi","Tahu","Telur","Tempe","Terong","Tomat","Udang","Wortel"
-        )
-
-        try {
-            val stream = context.assets.open("labels.txt")
-            val text = stream.bufferedReader().use { it.readText() }
-            val parsed = text.split('\n').map { it.trim() }.filter { it.isNotEmpty() }
-            if (parsed.isEmpty()) defaultLabels else parsed
-        } catch (_: Exception) {
-            defaultLabels
-        }
-    }
-
-    // Instantiate detector with model filename placed under app/src/main/assets (packaged into assets automatically)
-    val detector = remember { YOLOv8sDetector(context, "yolov8s.tflite", labels, useNNAPI = false) }
-
-    // States for upload-image feature
-    val coroutineScope = rememberCoroutineScope()
-    var selectedBitmap by remember { mutableStateOf<Bitmap?>(null) }
-    var imageDetections by remember { mutableStateOf<List<DetectedIngredient>>(emptyList()) }
-    var debugMessage by remember { mutableStateOf<String?>(null) }
-
-    // Flag to pause camera analysis when processing uploaded image
-    var isProcessingUploadedImage by remember { mutableStateOf(false) }
-
-    val pickImageLauncher = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
-        uri?.let {
-            // Set flag immediately to stop camera detection from interfering
-            isProcessingUploadedImage = true
-            try {
-                // Read EXIF orientation first (open a separate stream)
-                val exifStream = context.contentResolver.openInputStream(it)
-                var rotationNeeded = 0
-                exifStream?.use { stream ->
-                    try {
-                        val exif = ExifInterface(stream)
-                        val orientation = exif.getAttributeInt(ExifInterface.TAG_ORIENTATION, ExifInterface.ORIENTATION_NORMAL)
-                        rotationNeeded = when (orientation) {
-                            ExifInterface.ORIENTATION_ROTATE_90 -> 90
-                            ExifInterface.ORIENTATION_ROTATE_180 -> 180
-                            ExifInterface.ORIENTATION_ROTATE_270 -> 270
-                            else -> 0
-                        }
-                    } catch (e: Exception) {
-                        Log.w("CameraScreen", "Failed to read EXIF: ${e.message}")
-                    }
-                }
-
-                val stream = context.contentResolver.openInputStream(it)
-                var bmpOriginal = BitmapFactory.decodeStream(stream)
-                stream?.close()
-
-                if (bmpOriginal != null) {
-                    if (rotationNeeded != 0) {
-                        val matrix = android.graphics.Matrix().apply { postRotate(rotationNeeded.toFloat()) }
-                        bmpOriginal = Bitmap.createBitmap(bmpOriginal, 0, 0, bmpOriginal.width, bmpOriginal.height, matrix, true)
-                    }
-
-                    // downscale large images to avoid OOM and speed up detection
-                    val maxDim = 1024
-                    val scaledBmp = if (kotlin.math.max(bmpOriginal.width, bmpOriginal.height) > maxDim) {
-                        val ratio = maxDim.toFloat() / kotlin.math.max(bmpOriginal.width, bmpOriginal.height)
-                        val newW = (bmpOriginal.width * ratio).toInt().coerceAtLeast(1)
-                        val newH = (bmpOriginal.height * ratio).toInt().coerceAtLeast(1)
-                        Bitmap.createScaledBitmap(bmpOriginal, newW, newH, true)
-                    } else bmpOriginal
-
-                    selectedBitmap = scaledBmp
-
-                    // run detection off main thread and log inference time
-                    coroutineScope.launch(Dispatchers.Default) {
-                        // Small delay to ensure camera analysis has stopped (prevents race condition with detector)
-                        delay(100)
-
-                        val t0 = System.currentTimeMillis()
-                        // Use lower threshold (0.35f) for uploaded images to match manual detect behavior
-                        var dets = detector.detectObjects(scaledBmp, 0.35f)
-                        val t1 = System.currentTimeMillis()
-                        Log.d("CameraScreen", "Detection on scaled image took ${t1 - t0} ms; found ${dets.size} detections")
-
-                        // If we got no detections on scaled image, try original image as a fallback with even lower threshold
-                        if (dets.isEmpty() && scaledBmp != bmpOriginal) {
-                            val t2 = System.currentTimeMillis()
-                            try {
-                                dets = detector.detectObjects(bmpOriginal, 0.3f)
-                                val t3 = System.currentTimeMillis()
-                                Log.d("CameraScreen", "Fallback detection on original image took ${t3 - t2} ms; found ${dets.size} detections")
-                            } catch (e: Exception) {
-                                Log.e("CameraScreen", "Fallback detection error: ${e.message}", e)
-                            }
-                        }
-
-                        val mapped = dets.map { d ->
-                            DetectedIngredient(
-                                label = d.className,
-                                confidence = d.confidence,
-                                boundingBox = android.graphics.RectF(d.box.left, d.box.top, d.box.right, d.box.bottom)
-                            )
-                        }
-
-                        withContext(Dispatchers.Main) {
-                            imageDetections = mapped
-                            viewModel.updateDetectedIngredients(mapped.map { it.label })
-                        }
-                    }
-                }
-            } catch (e: Exception) {
-                Log.e("CameraScreen", "Error loading picked image: ${e.message}", e)
-            }
-        }
-    }
-
-    // Helper: manual detect button (lower threshold) for debugging uploaded images
-    fun triggerManualDetectOnSelected() {
-        val bmp = selectedBitmap ?: return
-        coroutineScope.launch(Dispatchers.Default) {
-            val t0 = System.currentTimeMillis()
-            val dets = try {
-                detector.detectObjects(bmp, 0.35f) // Lower threshold for manual re-detect
-            } catch (e: Exception) {
-                Log.e("CameraScreen", "Manual detection error: ${e.message}", e)
-                emptyList()
-            }
-            val t1 = System.currentTimeMillis()
-            val mapped = dets.map { d ->
-                DetectedIngredient(
-                    label = d.className,
-                    confidence = d.confidence,
-                    boundingBox = android.graphics.RectF(d.box.left, d.box.top, d.box.right, d.box.bottom)
-                )
-            }
-            withContext(Dispatchers.Main) {
-                imageDetections = mapped
-                viewModel.updateDetectedIngredients(mapped.map { it.label })
-                debugMessage = "Manual detect: found ${mapped.size} (in ${t1 - t0} ms): ${mapped.joinToString(",") { it.label }}"
-            }
-            // clear message after 3 seconds
-            coroutineScope.launch {
-                delay(3000)
-                withContext(Dispatchers.Main) { debugMessage = null }
-            }
-        }
-    }
-
-    DisposableEffect(Unit) {
-        onDispose {
-            detector.close()
-        }
-    }
-
-    Box(modifier = Modifier.fillMaxSize()) {
-        // transient debug snackbar-like overlay
-        debugMessage?.let { msg ->
-            Box(modifier = Modifier
-                .fillMaxWidth()
-                .padding(top = 24.dp)
-                .align(Alignment.TopCenter)
-                .zIndex(10f)) {
-                Surface(
-                    color = Color(0xFF4ECDC4).copy(alpha = 0.9f),
-                    shape = RoundedCornerShape(12.dp),
-                    shadowElevation = 8.dp
-                ) {
-                    Row(
-                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Icon(
-                            Icons.Default.Info,
-                            contentDescription = null,
-                            tint = Color.White,
-                            modifier = Modifier.size(20.dp)
-                        )
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text(text = msg, color = Color.White, fontWeight = FontWeight.Medium)
-                    }
-                }
-            }
-        }
-        if (selectedBitmap != null) {
-            // Show picked image and overlay detections
-            val bmp = selectedBitmap!!
-            Image(
-                bitmap = bmp.asImageBitmap(),
-                contentDescription = "Selected image",
-                modifier = Modifier.fillMaxSize(),
-                contentScale = ContentScale.Fit
-            )
-        } else {
-            AndroidView(
-                factory = { ctx ->
-                    val previewView = PreviewView(ctx)
-                    val cameraProviderFuture = ProcessCameraProvider.getInstance(ctx)
-
-                    cameraProviderFuture.addListener({
-                        val cameraProvider = cameraProviderFuture.get()
-
-                        val preview = Preview.Builder().build().also {
-                            it.setSurfaceProvider(previewView.surfaceProvider)
-                        }
-
-                        val imageAnalysis = ImageAnalysis.Builder()
-                            .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
-                            .build()
-                            .also { analysis ->
-                                analysis.setAnalyzer(Executors.newSingleThreadExecutor()) { imageProxy ->
-                                    // Skip camera detection if we're processing an uploaded image
-                                    if (isProcessingUploadedImage || selectedBitmap != null) {
-                                        imageProxy.close()
-                                        return@setAnalyzer
-                                    }
-
-                                    val bmp = imageProxyToBitmap(imageProxy)
-                                    if (bmp != null) {
-                                        // imageProxyToBitmap already rotates the bitmap according to rotationDegrees
-                                        val dets = detector.detectObjects(bmp) // Uses default 0.5 threshold
-
-                                        // Map DetectionCamera -> DetectedIngredient (simple mapping)
-                                        val mapped = dets.map { d ->
-                                            DetectedIngredient(
-                                                label = d.className,
-                                                confidence = d.confidence,
-                                                boundingBox = android.graphics.RectF(
-                                                    d.box.left, d.box.top, d.box.right, d.box.bottom
-                                                )
-                                            )
-                                        }
-
-                                        detections = mapped
-                                        val ingredients = mapped.map { it.label }
-                                        viewModel.updateDetectedIngredients(ingredients)
-                                    }
-
-                                    imageProxy.close()
-                                }
-                            }
-
-                        val cameraSelector = CameraSelector.DEFAULT_BACK_CAMERA
-
-                        try {
-                            cameraProvider.unbindAll()
-                            cameraProvider.bindToLifecycle(
-                                lifecycleOwner,
-                                cameraSelector,
-                                preview,
-                                imageAnalysis
-                            )
-                        } catch (_: Exception) {
-                            // ignore
-                        }
-                    }, ContextCompat.getMainExecutor(ctx))
-
-                    previewView
-                },
+fun CameraScanScreen() {
+    Scaffold(
+        topBar = { ScanTopBar() },
+        bottomBar = { ScanBottomNav() }
+    ) { innerPadding ->
+        Box(
+            modifier = Modifier
+                .padding(innerPadding)
+                .fillMaxSize()
+                .background(DeepCharcoal)
+        ) {
+            // 1. Viewfinder (Simulasi Kamera)
+            AsyncImage(
+                model = "https://lh3.googleusercontent.com/aida-public/AB6AXuD4LPwpVOM1OS0kOmNvWkw1gbcXtGUZZU3J3-GkQtAwfqLhZtuPhgpF3X8H5AZcBobSxEB7Yqx8_SHdEMnyV4hiWteiaqT4B84egndPxc8SegPdO8QdxLf98TGIa8IVQMib2f4drTttygzq50MR-PhLKwHrZ1wFj-OSTe4QsO0qb5Fb4xJ7nd0sOLp2Lxsv-XUkjVFardMV972w2w1liVbmnGTcl7VyiMDLllRqdkxhaedMgZdQjy7HU4EOsxdhunKwntGa9B_RtRI",
+                contentDescription = "Camera Viewfinder",
+                contentScale = ContentScale.Crop,
                 modifier = Modifier.fillMaxSize()
             )
-        }
 
-        // Overlay for detection boxes (use imageDetections if selected, else camera detections)
-        val currentDetections = if (selectedBitmap != null) imageDetections else detections
-
-        // Animated scanning line effect
-        val infiniteTransition = rememberInfiniteTransition(label = "scan")
-        val scanLineY by infiniteTransition.animateFloat(
-            initialValue = 0f,
-            targetValue = 1f,
-            animationSpec = infiniteRepeatable(
-                animation = tween(2000, easing = LinearEasing),
-                repeatMode = RepeatMode.Restart
-            ),
-            label = "scanLine"
-        )
-
-        // Pulsing animation for detection boxes
-        val pulseScale by infiniteTransition.animateFloat(
-            initialValue = 1f,
-            targetValue = 1.05f,
-            animationSpec = infiniteRepeatable(
-                animation = tween(500, easing = FastOutSlowInEasing),
-                repeatMode = RepeatMode.Reverse
-            ),
-            label = "pulse"
-        )
-
-        Canvas(modifier = Modifier.fillMaxSize()) {
-            val canvasW = size.width
-            val canvasH = size.height
-
-            // Draw scanning line when no detections
-            if (currentDetections.isEmpty() && selectedBitmap == null) {
-                val lineY = scanLineY * canvasH
-                drawLine(
-                    brush = Brush.horizontalGradient(
-                        colors = listOf(
-                            Color.Transparent,
-                            Color(0xFF4ECDC4).copy(alpha = 0.8f),
-                            Color(0xFF44CF6C).copy(alpha = 0.9f),
-                            Color(0xFF4ECDC4).copy(alpha = 0.8f),
-                            Color.Transparent
-                        )
-                    ),
-                    start = Offset(0f, lineY),
-                    end = Offset(canvasW, lineY),
-                    strokeWidth = 4f
-                )
-                // Glow effect
-                drawLine(
-                    brush = Brush.horizontalGradient(
-                        colors = listOf(
-                            Color.Transparent,
-                            Color(0xFF4ECDC4).copy(alpha = 0.3f),
-                            Color(0xFF44CF6C).copy(alpha = 0.4f),
-                            Color(0xFF4ECDC4).copy(alpha = 0.3f),
-                            Color.Transparent
-                        )
-                    ),
-                    start = Offset(0f, lineY),
-                    end = Offset(canvasW, lineY),
-                    strokeWidth = 20f
-                )
-            }
-
-            if (selectedBitmap != null) {
-                val bmp = selectedBitmap!!
-                val bmpW = bmp.width.toFloat()
-                val bmpH = bmp.height.toFloat()
-                val scale = kotlin.math.min(canvasW / bmpW, canvasH / bmpH)
-                val offsetX = (canvasW - bmpW * scale) / 2f
-                val offsetY = (canvasH - bmpH * scale) / 2f
-
-                currentDetections.forEachIndexed { index, detection ->
-                    val box = detection.boundingBox
-                    val boxColor = ingredientColors[index % ingredientColors.size]
-
-                    val left = offsetX + box.left * scale
-                    val top = offsetY + box.top * scale
-                    val right = offsetX + box.right * scale
-                    val bottom = offsetY + box.bottom * scale
-
-                    val rectLeft = left.coerceIn(0f, canvasW)
-                    val rectTop = top.coerceIn(0f, canvasH)
-                    val rectRight = right.coerceIn(0f, canvasW)
-                    val rectBottom = bottom.coerceIn(0f, canvasH)
-
-                    val width = rectRight - rectLeft
-                    val height = rectBottom - rectTop
-                    val cornerLength = minOf(width, height) * 0.2f
-
-                    // Draw glowing background
-                    drawRoundRect(
-                        color = boxColor.copy(alpha = 0.15f),
-                        topLeft = Offset(rectLeft, rectTop),
-                        size = Size(width, height),
-                        cornerRadius = CornerRadius(8f, 8f)
-                    )
-
-                    // Draw animated corner brackets
-                    val strokeWidth = 4f * pulseScale
-                    // Top-left corner
-                    drawLine(boxColor, Offset(rectLeft, rectTop + cornerLength), Offset(rectLeft, rectTop), strokeWidth, StrokeCap.Round)
-                    drawLine(boxColor, Offset(rectLeft, rectTop), Offset(rectLeft + cornerLength, rectTop), strokeWidth, StrokeCap.Round)
-                    // Top-right corner
-                    drawLine(boxColor, Offset(rectRight - cornerLength, rectTop), Offset(rectRight, rectTop), strokeWidth, StrokeCap.Round)
-                    drawLine(boxColor, Offset(rectRight, rectTop), Offset(rectRight, rectTop + cornerLength), strokeWidth, StrokeCap.Round)
-                    // Bottom-left corner
-                    drawLine(boxColor, Offset(rectLeft, rectBottom - cornerLength), Offset(rectLeft, rectBottom), strokeWidth, StrokeCap.Round)
-                    drawLine(boxColor, Offset(rectLeft, rectBottom), Offset(rectLeft + cornerLength, rectBottom), strokeWidth, StrokeCap.Round)
-                    // Bottom-right corner
-                    drawLine(boxColor, Offset(rectRight - cornerLength, rectBottom), Offset(rectRight, rectBottom), strokeWidth, StrokeCap.Round)
-                    drawLine(boxColor, Offset(rectRight, rectBottom), Offset(rectRight, rectBottom - cornerLength), strokeWidth, StrokeCap.Round)
-                }
-            } else {
-                currentDetections.forEachIndexed { index, detection ->
-                    val box = detection.boundingBox
-                    val boxColor = ingredientColors[index % ingredientColors.size]
-
-                    val rectLeft = box.left
-                    val rectTop = box.top
-                    val rectRight = box.right
-                    val rectBottom = box.bottom
-
-                    val width = rectRight - rectLeft
-                    val height = rectBottom - rectTop
-                    val cornerLength = minOf(width, height) * 0.2f
-
-                    // Draw glowing background
-                    drawRoundRect(
-                        color = boxColor.copy(alpha = 0.15f),
-                        topLeft = Offset(rectLeft, rectTop),
-                        size = Size(width, height),
-                        cornerRadius = CornerRadius(8f, 8f)
-                    )
-
-                    // Draw animated corner brackets
-                    val strokeWidth = 4f * pulseScale
-                    // Top-left corner
-                    drawLine(boxColor, Offset(rectLeft, rectTop + cornerLength), Offset(rectLeft, rectTop), strokeWidth, StrokeCap.Round)
-                    drawLine(boxColor, Offset(rectLeft, rectTop), Offset(rectLeft + cornerLength, rectTop), strokeWidth, StrokeCap.Round)
-                    // Top-right corner
-                    drawLine(boxColor, Offset(rectRight - cornerLength, rectTop), Offset(rectRight, rectTop), strokeWidth, StrokeCap.Round)
-                    drawLine(boxColor, Offset(rectRight, rectTop), Offset(rectRight, rectTop + cornerLength), strokeWidth, StrokeCap.Round)
-                    // Bottom-left corner
-                    drawLine(boxColor, Offset(rectLeft, rectBottom - cornerLength), Offset(rectLeft, rectBottom), strokeWidth, StrokeCap.Round)
-                    drawLine(boxColor, Offset(rectLeft, rectBottom), Offset(rectLeft + cornerLength, rectBottom), strokeWidth, StrokeCap.Round)
-                    // Bottom-right corner
-                    drawLine(boxColor, Offset(rectRight - cornerLength, rectBottom), Offset(rectRight, rectBottom), strokeWidth, StrokeCap.Round)
-                    drawLine(boxColor, Offset(rectRight, rectBottom), Offset(rectRight, rectBottom - cornerLength), strokeWidth, StrokeCap.Round)
-                }
-            }
-        }
-
-        // Detection labels overlay (rendered as Compose elements for better text)
-        if (currentDetections.isNotEmpty()) {
-            BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
-                val canvasW = constraints.maxWidth.toFloat()
-                val canvasH = constraints.maxHeight.toFloat()
-
-                currentDetections.forEachIndexed { index, detection ->
-                    val boxColor = ingredientColors[index % ingredientColors.size]
-                    val box = detection.boundingBox
-
-                    // Calculate label position
-                    val labelX: Float
-                    val labelY: Float
-
-                    if (selectedBitmap != null) {
-                        val bmp = selectedBitmap!!
-                        val bmpW = bmp.width.toFloat()
-                        val bmpH = bmp.height.toFloat()
-                        val scale = kotlin.math.min(canvasW / bmpW, canvasH / bmpH)
-                        val offsetX = (canvasW - bmpW * scale) / 2f
-                        val offsetY = (canvasH - bmpH * scale) / 2f
-
-                        labelX = offsetX + box.left * scale
-                        labelY = offsetY + box.top * scale
-                    } else {
-                        labelX = box.left
-                        labelY = box.top
-                    }
-
-                    // Label badge
-                    Box(
-                        modifier = Modifier
-                            .offset(
-                                x = (labelX / LocalDensity.current.density).dp,
-                                y = ((labelY - 28f) / LocalDensity.current.density).dp
-                            )
-                    ) {
-                        Surface(
-                            color = boxColor,
-                            shape = RoundedCornerShape(4.dp),
-                            shadowElevation = 4.dp
-                        ) {
-                            Row(
-                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Text(
-                                    text = detection.label.replaceFirstChar { it.uppercase() },
-                                    color = Color.White,
-                                    fontSize = 11.sp,
-                                    fontWeight = FontWeight.Bold
-                                )
-                                Spacer(modifier = Modifier.width(4.dp))
-                                Text(
-                                    text = "${(detection.confidence * 100).toInt()}%",
-                                    color = Color.White.copy(alpha = 0.9f),
-                                    fontSize = 10.sp,
-                                    fontWeight = FontWeight.Medium
-                                )
-                            }
-                        }
-                    }
-                }
-            }
-        }
-
-        // Fun floating action buttons with icons
-        Column(
-            modifier = Modifier
-                .align(Alignment.BottomEnd)
-                .padding(end = 16.dp, bottom = 200.dp),
-            horizontalAlignment = Alignment.CenterHorizontally
-        ) {
-            // Upload button with animation
-            val uploadScale by animateFloatAsState(
-                targetValue = if (selectedBitmap != null) 0.9f else 1f,
-                animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy),
-                label = "uploadScale"
-            )
-
-            FloatingActionButton(
-                onClick = { pickImageLauncher.launch("image/*") },
+            // Viewfinder Overlay Gradient
+            Box(
                 modifier = Modifier
-                    .scale(uploadScale)
-                    .shadow(8.dp, CircleShape),
-                containerColor = MaterialTheme.colorScheme.secondary,
-                contentColor = Color.White
-            ) {
-                Icon(
-                    Icons.Outlined.PhotoLibrary,
-                    contentDescription = "Upload Image",
-                    modifier = Modifier.size(24.dp)
-                )
-            }
-
-            Spacer(modifier = Modifier.height(12.dp))
-
-            AnimatedVisibility(
-                visible = selectedBitmap != null,
-                enter = scaleIn() + fadeIn(),
-                exit = scaleOut() + fadeOut()
-            ) {
-                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    FloatingActionButton(
-                        onClick = {
-                            selectedBitmap = null
-                            imageDetections = emptyList()
-                            isProcessingUploadedImage = false
-                            viewModel.updateDetectedIngredients(emptyList())
-                        },
-                        modifier = Modifier.size(48.dp),
-                        containerColor = MaterialTheme.colorScheme.secondary,
-                        contentColor = Color.White
-                    ) {
-                        Icon(Icons.Default.Close, contentDescription = "Clear", modifier = Modifier.size(20.dp))
-                    }
-
-                    Spacer(modifier = Modifier.height(8.dp))
-
-                    FloatingActionButton(
-                        onClick = { triggerManualDetectOnSelected() },
-                        modifier = Modifier.size(48.dp),
-                        containerColor = MaterialTheme.colorScheme.primaryContainer,
-                        contentColor = MaterialTheme.colorScheme.primary
-                    ) {
-                        Icon(Icons.Default.Refresh, contentDescription = "Re-detect", modifier = Modifier.size(20.dp))
-                    }
-                }
-            }
-        }
-
-        // Animated detection info panel
-        AnimatedVisibility(
-            visible = true,
-            modifier = Modifier.align(Alignment.BottomCenter)
-        ) {
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
+                    .fillMaxSize()
                     .background(
                         Brush.verticalGradient(
-                            colors = listOf(
+                            listOf(
+                                Color.Black.copy(alpha = 0.4f),
                                 Color.Transparent,
-                                Color.Black.copy(alpha = 0.8f),
-                                Color.Black.copy(alpha = 0.95f)
+                                Color.Transparent,
+                                Color.Black.copy(alpha = 0.4f)
                             )
                         )
                     )
-                    .padding(horizontal = 16.dp, vertical = 20.dp)
+            )
+
+            // 2. AI Bounding Boxes (Simulasi Deteksi YOLO)
+            DetectionBox(label = "Tomat", top = 0.2f, left = 0.15f, width = 120, height = 120)
+            DetectionBox(label = "Selasih", top = 0.45f, left = 0.55f, width = 100, height = 80)
+            DetectionBox(label = "Bawang Putih", top = 0.65f, left = 0.25f, width = 70, height = 70)
+
+            // 3. Status AI (Pojok kanan atas)
+            AIStatusBadge()
+
+            // 4. Bottom Sheet (Simulasi Draggable)
+            ScanBottomSheet(modifier = Modifier.align(Alignment.BottomCenter))
+        }
+    }
+}
+
+@Composable
+fun DetectionBox(label: String, top: Float, left: Float, width: Int, height: Int) {
+    // Kita gunakan Box induk sebagai kanvas kamera
+    Box(modifier = Modifier.fillMaxSize()) {
+        Column(
+            modifier = Modifier
+                // Menggunakan absoluteOffset untuk posisi presisi (x, y)
+                // left dan top adalah normalisasi (0.0 - 1.0) dari koordinat YOLO
+                .absoluteOffset(
+                    x = (left * 350).dp, // Sesuaikan pengali dengan lebar layar preview
+                    y = (top * 600).dp   // Sesuaikan pengali dengan tinggi layar preview
+                )
+        ) {
+            // Label Objek (Label di atas kotak)
+            Surface(
+                color = Terracotta,
+                shape = RoundedCornerShape(topStart = 8.dp, topEnd = 8.dp)
             ) {
-                // Header with icon
                 Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier.padding(bottom = 12.dp)
+                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp),
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
-                    // Animated ingredient icon
-                    val iconRotation by rememberInfiniteTransition(label = "iconSpin").animateFloat(
-                        initialValue = 0f,
-                        targetValue = if (currentDetections.isNotEmpty()) 0f else 360f,
-                        animationSpec = infiniteRepeatable(
-                            animation = tween(2000, easing = LinearEasing),
-                            repeatMode = RepeatMode.Restart
-                        ),
-                        label = "iconRotate"
+                    Icon(
+                        imageVector = Icons.Default.CheckCircle,
+                        contentDescription = null,
+                        tint = Color.White,
+                        modifier = Modifier.size(12.dp)
                     )
-
-                    Box(
-                        modifier = Modifier
-                            .size(40.dp)
-                            .clip(CircleShape)
-                            .background(
-                                if (currentDetections.isNotEmpty())
-                                    Color(0xFFffcc00) // Bauhaus Yellow
-                                else
-                                    Color(0xFF1a1a1a) // Bauhaus Black
-                            ),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Icon(
-                            if (currentDetections.isNotEmpty()) Icons.Default.Restaurant else Icons.Outlined.CameraAlt,
-                            contentDescription = null,
-                            tint = if (currentDetections.isNotEmpty()) Color(0xFF1a1a1a) else Color.White,
-                            modifier = Modifier
-                                .size(24.dp)
-                                .rotate(if (currentDetections.isEmpty()) iconRotation else 0f)
-                        )
-                    }
-
-                    Spacer(modifier = Modifier.width(12.dp))
-
-                    Column {
-                        Text(
-                            text = if (currentDetections.isNotEmpty()) "Found ${currentDetections.size} Ingredient${if (currentDetections.size > 1) "s" else ""}!" else "Scanning...",
-                            style = MaterialTheme.typography.titleMedium,
-                            color = Color.White,
-                            fontWeight = FontWeight.Bold
-                        )
-
-                        AnimatedVisibility(visible = currentDetections.isEmpty()) {
-                            Text(
-                                text = "Point camera at ingredients to detect them",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = Color.White.copy(alpha = 0.7f)
-                            )
-                        }
-                    }
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Text(
+                        text = label,
+                        color = Color.White,
+                        fontSize = 10.sp,
+                        fontWeight = FontWeight.Bold
+                    )
                 }
+            }
+            // Kotak Deteksi (Bounding Box)
+            Box(
+                modifier = Modifier
+                    .size(width.dp, height.dp)
+                    .border(
+                        width = 2.dp,
+                        color = Terracotta,
+                        shape = RoundedCornerShape(
+                            bottomStart = 8.dp,
+                            bottomEnd = 8.dp,
+                            topEnd = 8.dp
+                        )
+                    )
+            )
+        }
+    }
+}
 
-                // Animated ingredient chips
-                AnimatedVisibility(
-                    visible = currentDetections.isNotEmpty(),
-                    enter = expandVertically() + fadeIn(),
-                    exit = shrinkVertically() + fadeOut()
-                ) {
-                    Column {
-                        LazyRow(
-                            horizontalArrangement = Arrangement.spacedBy(8.dp),
-                            contentPadding = PaddingValues(vertical = 8.dp)
-                        ) {
-                            items(currentDetections.size) { index ->
-                                val detection = currentDetections[index]
-                                val chipColor = ingredientColors[index % ingredientColors.size]
+@Composable
+fun AIStatusBadge() {
+    val infiniteTransition = rememberInfiniteTransition()
+    val alpha by infiniteTransition.animateFloat(
+        initialValue = 0.4f,
+        targetValue = 1f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(1000),
+            repeatMode = RepeatMode.Reverse
+        )
+    )
 
-                                // Animate each chip entrance
-                                val chipScale by animateFloatAsState(
-                                    targetValue = 1f,
-                                    animationSpec = spring(
-                                        dampingRatio = Spring.DampingRatioMediumBouncy,
-                                        stiffness = Spring.StiffnessLow
-                                    ),
-                                    label = "chipScale$index"
-                                )
-
-                                Surface(
-                                    modifier = Modifier
-                                        .scale(chipScale)
-                                        .animateItem(),
-                                    shape = RoundedCornerShape(20.dp),
-                                    color = chipColor.copy(alpha = 0.2f),
-                                    border = androidx.compose.foundation.BorderStroke(
-                                        1.dp,
-                                        chipColor.copy(alpha = 0.5f)
-                                    )
-                                ) {
-                                    Row(
-                                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
-                                        verticalAlignment = Alignment.CenterVertically
-                                    ) {
-                                        // Colored dot indicator
-                                        Box(
-                                            modifier = Modifier
-                                                .size(8.dp)
-                                                .clip(CircleShape)
-                                                .background(chipColor)
-                                        )
-
-                                        Spacer(modifier = Modifier.width(8.dp))
-
-                                        Text(
-                                            text = detection.label.replaceFirstChar { it.uppercase() },
-                                            style = MaterialTheme.typography.bodyMedium,
-                                            color = Color.White,
-                                            fontWeight = FontWeight.Medium
-                                        )
-
-                                        Spacer(modifier = Modifier.width(6.dp))
-
-                                        // Confidence badge
-                                        Box(
-                                            modifier = Modifier
-                                                .clip(RoundedCornerShape(8.dp))
-                                                .background(chipColor.copy(alpha = 0.3f))
-                                                .padding(horizontal = 6.dp, vertical = 2.dp)
-                                        ) {
-                                            Text(
-                                                text = "${(detection.confidence * 100).toInt()}%",
-                                                style = MaterialTheme.typography.labelSmall,
-                                                color = chipColor,
-                                                fontWeight = FontWeight.Bold
-                                            )
-                                        }
-                                    }
-                                }
-                            }
-                        }
-
-                        Spacer(modifier = Modifier.height(12.dp))
-
-                        // Fun search button with Bauhaus gradient
-                        Button(
-                            onClick = onSearchRecipes,
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(52.dp),
-                            shape = RoundedCornerShape(4.dp),
-                            colors = ButtonDefaults.buttonColors(containerColor = Color.Transparent),
-                            contentPadding = PaddingValues(0.dp),
-                            border = androidx.compose.foundation.BorderStroke(2.dp, MaterialTheme.colorScheme.primaryContainer)
-                        ) {
-                            Box(
-                                modifier = Modifier
-                                    .fillMaxSize()
-                                    .background(
-                                        MaterialTheme.colorScheme.primary,
-                                        shape = RoundedCornerShape(2.dp)
-                                    ),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Row(
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.Center
-                                ) {
-                                    Icon(
-                                        Icons.Default.AutoAwesome,
-                                        contentDescription = null,
-                                        tint = Color.White,
-                                        modifier = Modifier.size(20.dp)
-                                    )
-                                    Spacer(modifier = Modifier.width(8.dp))
-                                    Text(
-                                        text = "FIND RECIPES",
-                                        style = MaterialTheme.typography.titleMedium,
-                                        color = Color.White,
-                                        fontWeight = FontWeight.Bold
-                                    )
-                                    Spacer(modifier = Modifier.width(8.dp))
-                                    Icon(
-                                        Icons.AutoMirrored.Filled.ArrowForward,
-                                        contentDescription = null,
-                                        tint = Color.White,
-                                        modifier = Modifier.size(20.dp)
-                                    )
-                                }
-                            }
-                        }
-                    }
-                }
+    Box(modifier = Modifier.fillMaxWidth().padding(16.dp), contentAlignment = Alignment.TopEnd) {
+        Surface(
+            color = Color.Black.copy(alpha = 0.6f),
+            shape = CircleShape,
+            border = BorderStroke(1.dp, Color.White.copy(alpha = 0.1f))
+        ) {
+            Row(
+                modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(8.dp)
+                        .background(Terracotta.copy(alpha = alpha), CircleShape)
+                )
+                Spacer(modifier = Modifier.width(8.dp))
+                Text("PEMINDAIAN AI AKTIF", color = Color.White, fontSize = 10.sp, fontWeight = FontWeight.Bold)
             }
         }
     }
 }
 
-private fun imageProxyToBitmap(imageProxy: ImageProxy): Bitmap? {
-    return try {
-        val yBuffer = imageProxy.planes[0].buffer // Y
-        val uBuffer = imageProxy.planes[1].buffer // U
-        val vBuffer = imageProxy.planes[2].buffer // V
+@Composable
+fun ScanBottomSheet(modifier: Modifier = Modifier) {
+    Surface(
+        modifier = modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(topStart = 32.dp, topEnd = 32.dp),
+        color = Color.White,
+        shadowElevation = 16.dp
+    ) {
+        Column(
+            modifier = Modifier.padding(16.dp),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            // Handle
+            Box(
+                modifier = Modifier
+                    .size(40.dp, 4.dp)
+                    .background(Color.LightGray, CircleShape)
+            )
 
-        val ySize = yBuffer.remaining()
-        val uSize = uBuffer.remaining()
-        val vSize = vBuffer.remaining()
+            Spacer(modifier = Modifier.height(24.dp))
 
-        val nv21 = ByteArray(ySize + uSize + vSize)
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text("Bahan Terdeteksi", fontSize = 18.sp, fontWeight = FontWeight.Bold)
+                Surface(color = Color(0xFFFFF1ED), shape = RoundedCornerShape(8.dp)) {
+                    Text(
+                        "3 ITEM",
+                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                        color = Terracotta, fontWeight = FontWeight.Bold, fontSize = 12.sp
+                    )
+                }
+            }
 
-        // U and V are swapped
-        yBuffer.get(nv21, 0, ySize)
-        vBuffer.get(nv21, ySize, vSize)
-        uBuffer.get(nv21, ySize + vSize, uSize)
+            Spacer(modifier = Modifier.height(16.dp))
 
-        val yuvImage =
-            android.graphics.YuvImage(nv21, ImageFormat.NV21, imageProxy.width, imageProxy.height, null)
-        val out = ByteArrayOutputStream()
-        yuvImage.compressToJpeg(Rect(0, 0, imageProxy.width, imageProxy.height), 100, out)
-        val imageBytes = out.toByteArray()
+            // Chips Grid
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                DetectedChip("Tomat")
+                DetectedChip("Selasih")
+                DetectedChip("Bawang Putih")
+            }
 
-        var bitmap = BitmapFactory.decodeByteArray(imageBytes, 0, imageBytes.size)
+            Spacer(modifier = Modifier.height(32.dp))
 
-        // Rotate according to camera orientation
-        val rotationDegrees = imageProxy.imageInfo.rotationDegrees
-        if (rotationDegrees != 0) {
-            val matrix = Matrix().apply { postRotate(rotationDegrees.toFloat()) }
-            bitmap = Bitmap.createBitmap(bitmap, 0, 0, bitmap.width, bitmap.height, matrix, true)
+            Button(
+                onClick = { /* Search Action */ },
+                modifier = Modifier.fillMaxWidth().height(56.dp),
+                colors = ButtonDefaults.buttonColors(containerColor = Terracotta),
+                shape = CircleShape
+            ) {
+                Icon(Icons.Default.RestaurantMenu, null)
+                Spacer(modifier = Modifier.width(8.dp))
+                Text("Cari Resep", fontSize = 18.sp, fontWeight = FontWeight.Bold)
+            }
+            Spacer(modifier = Modifier.height(16.dp))
         }
+    }
+}
 
-        bitmap
-    } catch (_: Exception) {
-        null
+@Composable
+fun DetectedChip(label: String) {
+    Surface(
+        shape = CircleShape,
+        border = BorderStroke(1.dp, WhisperBorder),
+        color = Color.White
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Icon(Icons.Default.CheckCircle, null, tint = SoftSage, modifier = Modifier.size(16.dp))
+            Spacer(modifier = Modifier.width(8.dp))
+            Text(label, fontSize = 14.sp)
+        }
     }
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun PermissionDeniedScreen(onRequestPermission: () -> Unit) {
-    // Bouncing camera icon animation
-    val infiniteTransition = rememberInfiniteTransition(label = "bg")
-
-    val bounceOffset by infiniteTransition.animateFloat(
-        initialValue = 0f,
-        targetValue = 20f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(1000, easing = FastOutSlowInEasing),
-            repeatMode = RepeatMode.Reverse
-        ),
-        label = "bounce"
+fun ScanTopBar() {
+    TopAppBar(
+        title = { Text("Chefly", color = Terracotta, fontWeight = FontWeight.Bold) },
+        navigationIcon = {
+            IconButton(onClick = {}) { Icon(Icons.Default.Menu, null, tint = Terracotta) }
+        },
+        actions = {
+            Surface(modifier = Modifier.size(32.dp), shape = CircleShape) {
+                AsyncImage(model = "https://lh3.googleusercontent.com/aida-public/AB6AXuD__2jgtirZ6ue_yohrR4E5QGW8BQJSd1pQGJwcAee9FVqpXBW5Y_R4l4T0kkmIJ1zBf_1Il_S_lLI6oaNF8-2u-59Fsj7DWQk85-K8-65V1HH0wwen_mjPoHCQ7eanDGBdRe9Q87xKqgHyq5tsZeXCtkXb-YSJZLZTlilROhw_kQ2A15v6Muf-DoZonppSkgCs7Qg2hml1nshPb5X1iVzJerMhLtbG36gl6078Ysbr9Q0apfabKUqNCMZPbFAIe5MlV-aGPqQ-qv4", contentDescription = null)
+            }
+            Spacer(modifier = Modifier.width(16.dp))
+        },
+        colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.White)
     )
+}
 
-    Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(MaterialTheme.colorScheme.primaryContainer),
-        contentAlignment = Alignment.Center
-    ) {
-        Column(
-            horizontalAlignment = Alignment.CenterHorizontally,
-            modifier = Modifier.padding(32.dp)
-        ) {
-            // Animated camera icon with glow
-            Box(
-                modifier = Modifier
-                    .offset(y = (-bounceOffset).dp)
-                    .size(120.dp)
-                    .clip(CircleShape)
-                    .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.2f)),
-                contentAlignment = Alignment.Center
-            ) {
-                Icon(
-                    Icons.Outlined.CameraAlt,
-                    contentDescription = null,
-                    modifier = Modifier.size(60.dp),
-                    tint = MaterialTheme.colorScheme.primary
-                )
-            }
-
-            Spacer(modifier = Modifier.height(32.dp))
-
-            Text(
-                text = "CAMERA ACCESS NEEDED",
-                style = MaterialTheme.typography.headlineMedium,
-                color = MaterialTheme.colorScheme.primary,
-                fontWeight = FontWeight.Black,
-                textAlign = TextAlign.Center
-            )
-
-            Spacer(modifier = Modifier.height(16.dp))
-
-            Text(
-                text = "To detect ingredients and find amazing recipes, we need access to your camera. Don't worry, we respect your privacy!",
-                style = MaterialTheme.typography.bodyLarge,
-                color = MaterialTheme.colorScheme.onBackground,
-                textAlign = TextAlign.Center,
-                lineHeight = 24.sp
-            )
-
-            Spacer(modifier = Modifier.height(40.dp))
-
-            // Bauhaus permission button
-            Button(
-                onClick = onRequestPermission,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(56.dp)
-                    .border(4.dp, MaterialTheme.colorScheme.primary),
-                shape = RoundedCornerShape(0.dp),
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = MaterialTheme.colorScheme.primary,
-                    contentColor = Color.White
-                ),
-                elevation = ButtonDefaults.buttonElevation(defaultElevation = 0.dp)
-            ) {
-                Icon(
-                    Icons.Default.CameraAlt,
-                    contentDescription = null,
-                    modifier = Modifier.size(24.dp)
-                )
-                Spacer(modifier = Modifier.width(12.dp))
-                Text(
-                    text = "ENABLE CAMERA",
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Black
-                )
-            }
-
-            Spacer(modifier = Modifier.height(24.dp))
-
-            // Fun emoji hint
-            Row(
-                horizontalArrangement = Arrangement.Center,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text("🥕", fontSize = 24.sp)
-                Spacer(modifier = Modifier.width(8.dp))
-                Text("🍅", fontSize = 24.sp)
-                Spacer(modifier = Modifier.width(8.dp))
-                Text("🥦", fontSize = 24.sp)
-                Spacer(modifier = Modifier.width(8.dp))
-                Text("🍳", fontSize = 24.sp)
-                Spacer(modifier = Modifier.width(8.dp))
-                Text("✨", fontSize = 24.sp)
-            }
-
-            Spacer(modifier = Modifier.height(12.dp))
-
-            Text(
-                text = "Scan ingredients, discover recipes!",
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onBackground,
-                textAlign = TextAlign.Center
-            )
-        }
+@Composable
+fun ScanBottomNav() {
+    NavigationBar(containerColor = Color.White) {
+        NavigationBarItem(selected = false, onClick = {}, icon = { Icon(Icons.Default.Home, null) }, label = { Text("Beranda") })
+        NavigationBarItem(
+            selected = true,
+            onClick = {},
+            icon = { Icon(Icons.Default.CenterFocusStrong, null) },
+            label = { Text("Pindai") },
+            colors = NavigationBarItemDefaults.colors(selectedIconColor = Terracotta, indicatorColor = Color(0xFFFFF1ED))
+        )
+        NavigationBarItem(selected = false, onClick = {}, icon = { Icon(Icons.Default.RestaurantMenu, null) }, label = { Text("Resep") })
+        NavigationBarItem(selected = false, onClick = {}, icon = { Icon(Icons.Default.Bookmark, null) }, label = { Text("Tersimpan") })
     }
+}
+
+@Preview(showBackground = true, device = "spec:width=430dp,height=932dp")
+@Composable
+fun PreviewCameraScan() {
+    CameraScanScreen()
 }

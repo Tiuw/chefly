@@ -8,86 +8,86 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.Color
 
 /**
- * Bauhaus Light Color Scheme
- * Bold, geometric, neo-brutalist kitchen aesthetic
+ * Chefly Light Color Scheme
+ * Warm, culinary-inspired, and tech-forward
  */
 private val LightColorScheme = lightColorScheme(
-    // Primary: Black (#1a1a1a)
-    primary = BauhausPrimary,
-    onPrimary = BauhausOnPrimary,
-    primaryContainer = BauhausPrimaryContainer,
-    onPrimaryContainer = Color(0xFF1a1a1a),
+    primary = CheflyPrimary,
+    onPrimary = CheflyOnPrimary,
+    primaryContainer = CheflyPrimaryContainer,
+    onPrimaryContainer = CheflyOnPrimaryContainer,
 
-    // Secondary: Red (#e63b2e)
-    secondary = BauhausSecondary,
-    onSecondary = BauhausOnSecondary,
-    secondaryContainer = BauhausSecondaryContainer,
-    onSecondaryContainer = Color(0xFF1a1a1a),
+    secondary = CheflySecondary,
+    onSecondary = CheflyOnSecondary,
+    secondaryContainer = CheflySecondaryContainer,
+    onSecondaryContainer = CheflyOnSecondaryContainer,
 
-    // Tertiary: Blue (#0055ff)
-    tertiary = BauhausTertiary,
-    onTertiary = BauhausOnTertiary,
-    tertiaryContainer = BauhausTertiaryContainer,
-    onTertiaryContainer = Color(0xFF1a1a1a),
+    tertiary = CheflyTertiary,
+    onTertiary = CheflyOnTertiary,
+    tertiaryContainer = CheflyTertiaryContainer,
+    onTertiaryContainer = CheflyOnTertiaryContainer,
 
-    // Surfaces
-    background = BauhausBackground,
-    onBackground = Color(0xFF1a1a1a),
-    surface = BauhausSurface,
-    onSurface = BauhausOnSurface,
-    surfaceVariant = BauhausSurfaceVariant,
-    onSurfaceVariant = Color(0xFF4a4a4a),
+    background = CheflyBackground,
+    onBackground = CheflyOnBackground,
+    surface = CheflySurface,
+    onSurface = CheflyOnSurface,
+    surfaceVariant = CheflySurfaceVariant,
+    onSurfaceVariant = CheflyOnSurfaceVariant,
 
-    // Outlines
-    outline = BauhausOutline,
-    outlineVariant = BauhausOutlineVariant,
+    outline = CheflyOutline,
+    outlineVariant = CheflyOutlineVariant,
 
-    // Error
-    error = BauhausError,
-    onError = BauhausOnError,
-    errorContainer = BauhausErrorContainer,
-    onErrorContainer = Color(0xFF93000a)
+    error = CheflyError,
+    onError = CheflyOnError,
+    errorContainer = CheflyErrorContainer,
+    onErrorContainer = CheflyOnErrorContainer,
+
+    inverseSurface = CheflyInverseSurface,
+    inverseOnSurface = CheflyInverseOnSurface,
+    inversePrimary = CheflyPrimaryFixedDim,
+    surfaceTint = CheflySurfaceTint
 )
 
 /**
- * Bauhaus Dark Color Scheme (optional for future dark mode)
+ * Chefly Dark Color Scheme
+ * Using same palette but adjusted for dark backgrounds
  */
 private val DarkColorScheme = darkColorScheme(
-    primary = BauhausPrimaryContainer,
-    onPrimary = BauhausPrimary,
-    primaryContainer = BauhausPrimaryContainer,
-    onPrimaryContainer = Color(0xFF1a1a1a),
+    primary = CheflyPrimaryFixedDim,
+    onPrimary = CheflyOnPrimaryFixed,
+    primaryContainer = CheflyPrimary,
+    onPrimaryContainer = CheflyOnPrimary,
 
-    secondary = BauhausSecondary,
-    onSecondary = Color.White,
-    secondaryContainer = BauhausSecondaryContainer,
-    onSecondaryContainer = Color(0xFF1a1a1a),
+    secondary = CheflySecondaryContainer,
+    onSecondary = CheflyOnSecondaryContainer,
+    secondaryContainer = CheflySecondary,
+    onSecondaryContainer = CheflyOnSecondary,
 
-    tertiary = BauhausTertiary,
-    onTertiary = Color.White,
-    tertiaryContainer = BauhausTertiaryContainer,
-    onTertiaryContainer = Color(0xFF1a1a1a),
+    tertiary = CheflyTertiaryContainer,
+    onTertiary = CheflyOnTertiaryContainer,
+    tertiaryContainer = CheflyTertiary,
+    onTertiaryContainer = CheflyOnTertiary,
 
-    background = BauhausPrimary,
-    onBackground = BauhausSurface,
-    surface = Color(0xFF2a2a2a),
-    onSurface = BauhausSurface,
-    surfaceVariant = Color(0xFF3a3a3a),
-    onSurfaceVariant = Color(0xFFd0cbc3),
+    background = CheflyInverseSurface,
+    onBackground = CheflyInverseOnSurface,
+    surface = CheflyInverseSurface,
+    onSurface = CheflyInverseOnSurface,
+    surfaceVariant = CheflyOnSurfaceVariant,
+    onSurfaceVariant = CheflySurfaceVariant,
 
-    outline = BauhausOutline,
-    outlineVariant = BauhausOutlineVariant,
+    outline = CheflyOutlineVariant,
+    outlineVariant = CheflyOutline,
 
-    error = BauhausError,
-    onError = Color.White,
-    errorContainer = BauhausErrorContainer,
-    onErrorContainer = Color(0xFFffa4a0)
+    error = CheflyError,
+    onError = CheflyOnError,
+    errorContainer = CheflyErrorContainer,
+    onErrorContainer = CheflyOnErrorContainer
 )
 
 @Composable
 fun CheflyTheme(
     darkTheme: Boolean = isSystemInDarkTheme(),
-    dynamicColor: Boolean = false, // Disable dynamic colors for consistent Bauhaus design
+    dynamicColor: Boolean = false, // Disable dynamic colors for consistent Design System
     content: @Composable () -> Unit
 ) {
     val colorScheme = when {
@@ -97,7 +97,7 @@ fun CheflyTheme(
 
     MaterialTheme(
         colorScheme = colorScheme,
-        typography = BauhausTypography,
+        typography = CheflyTypography,
         content = content
     )
 }

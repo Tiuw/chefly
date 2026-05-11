@@ -3,250 +3,140 @@ package com.skripsi.chefly
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
-import androidx.activity.enableEdgeToEdge
-import androidx.compose.foundation.border
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.AccountBox
-import androidx.compose.material.icons.filled.Camera
-import androidx.compose.material.icons.filled.Favorite
-import androidx.compose.material.icons.filled.Home
-import androidx.compose.material.icons.filled.Kitchen
+import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.saveable.rememberSaveable
-import androidx.compose.runtime.setValue
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
-import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.compose.ui.unit.sp
+import androidx.navigation.NavHostController
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
+import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
-import com.skripsi.chefly.ui.viewmodel.SharedViewModel
 import com.skripsi.chefly.ui.navigation.Screen
-import com.skripsi.chefly.ui.screens.CameraScreen
-import com.skripsi.chefly.ui.screens.FridgeScreen
-import com.skripsi.chefly.ui.screens.HomeScreen
-import com.skripsi.chefly.ui.screens.RecipeDetailScreen
+import com.skripsi.chefly.ui.screens.* // Pastikan semua screen diimport
 import com.skripsi.chefly.ui.theme.CheflyTheme
 import dagger.hilt.android.AndroidEntryPoint
+
+// Warna sesuai palette desainmu
+val Terracotta = Color(0xFFE36C47)
 
 @AndroidEntryPoint
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        enableEdgeToEdge()
         setContent {
-            CheflyTheme {
-                CheflyApp()
+            CheflyTheme { // Ganti dengan nama theme projectmu
+                MainScreen()
             }
         }
     }
 }
 
 @Composable
-fun CheflyApp() {
+fun MainScreen() {
     val navController = rememberNavController()
-    val sharedViewModel: SharedViewModel = viewModel()
-    var currentDestination by rememberSaveable { mutableStateOf(AppDestinations.HOME) }
+
+    // Memantau route yang sedang aktif secara real-time
+    val navBackStackEntry by navController.currentBackStackEntryAsState()
+    val currentRoute = navBackStackEntry?.destination?.route
 
     Scaffold(
-        modifier = Modifier.fillMaxSize(),
         bottomBar = {
-            // Bauhaus Bottom Navigation Bar
-            BottomAppBar(
-                modifier = Modifier
-                    .height(72.dp)
-                    .border(2.dp, MaterialTheme.colorScheme.primary),
-                containerColor = MaterialTheme.colorScheme.surface,
-                tonalElevation = 0.dp
-            ) {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 8.dp),
-                    horizontalArrangement = Arrangement.SpaceEvenly,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    // Home
-                    BauhausNavItem(
-                        icon = Icons.Default.Home,
-                        label = "HOME",
-                        selected = currentDestination == AppDestinations.HOME,
-                        onClick = {
-                            currentDestination = AppDestinations.HOME
-                            navController.navigate(Screen.Home.route) {
-                                popUpTo(Screen.Home.route) { inclusive = true }
-                            }
-                        }
-                    )
-
-                    // Favorites
-                    BauhausNavItem(
-                        icon = Icons.Default.Favorite,
-                        label = "SAVED",
-                        selected = currentDestination == AppDestinations.FAVORITES,
-                        onClick = {
-                            currentDestination = AppDestinations.FAVORITES
-                            navController.navigate(Screen.Favorites.route) {
-                                        launchSingleTop = true
-                            }
-                        }
-                    )
-
-                    // Camera FAB (centered, elevated)
-                    Box(
-                        modifier = Modifier
-                            .size(64.dp)
-                            .offset(y = (-8).dp)
-                    ) {
-                        FloatingActionButton(
-                            onClick = {
-                                currentDestination = AppDestinations.CAMERA
-                                navController.navigate(Screen.Camera.route) {
-                                    popUpTo(Screen.Home.route)
-                                }
-                            },
-                            modifier = Modifier
-                                .fillMaxSize()
-                                .border(3.dp, MaterialTheme.colorScheme.primary),
-                            containerColor = MaterialTheme.colorScheme.secondary,
-                            contentColor = MaterialTheme.colorScheme.onSecondary,
-                            shape = RoundedCornerShape(0.dp)
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.Camera,
-                                contentDescription = "Scan",
-                                modifier = Modifier.size(28.dp)
-                            )
-                        }
-                    }
-
-                    // Fridge
-                    BauhausNavItem(
-                        icon = Icons.Default.Kitchen,
-                        label = "FRIDGE",
-                        selected = currentDestination == AppDestinations.FRIDGE,
-                        onClick = {
-                            currentDestination = AppDestinations.FRIDGE
-                            navController.navigate(Screen.Fridge.route) {
-                                launchSingleTop = true
-                            }
-                        }
-                    )
-
-                    // Profile
-                    BauhausNavItem(
-                        icon = Icons.Default.AccountBox,
-                        label = "PROFILE",
-                        selected = currentDestination == AppDestinations.PROFILE,
-                        onClick = {
-                            currentDestination = AppDestinations.PROFILE
-                            navController.navigate(Screen.Profile.route) {
-                                launchSingleTop = true
-                            }
-                        }
-                    )
-                }
+            // Navbar hanya muncul di halaman utama (Beranda, Pindai, Resep, Tersimpan)
+            if (shouldShowBottomBar(currentRoute)) {
+                BottomNavigationBar(navController, currentRoute)
             }
         }
     ) { innerPadding ->
         NavHost(
             navController = navController,
-            startDestination = Screen.Home.route,
+            startDestination = Screen.Beranda.route,
             modifier = Modifier.padding(innerPadding)
         ) {
-            composable(Screen.Home.route) {
-                currentDestination = AppDestinations.HOME
+            composable(Screen.Beranda.route) {
                 HomeScreen(
-                    sharedViewModel = sharedViewModel,
-                    onScanClick = {
-                        currentDestination = AppDestinations.CAMERA
-                        navController.navigate(Screen.Camera.route) {
-                            launchSingleTop = true
-                        }
+                    onScanClick = { navController.navigate(Screen.Pindai.route) },
+                    onRecipeClick = { id ->
+                        navController.navigate(Screen.RecipeDetail.createRoute(id))
                     },
-                    onRecipeClick = { recipeId ->
-                        navController.navigate(Screen.RecipeDetail.createRoute(recipeId))
+                    // FIX: Navigasi Lihat Semua agar Navbar ikut berubah
+                    onSeeAllClick = {
+                        navController.navigate(Screen.Resep.route) {
+                            popUpTo(Screen.Beranda.route) { saveState = true }
+                            launchSingleTop = true
+                            restoreState = true
+                        }
                     }
                 )
             }
 
-            composable(Screen.Fridge.route) {
-                currentDestination = AppDestinations.FRIDGE
-                FridgeScreen(
-                    sharedViewModel = sharedViewModel,
-                    onNavigateToHome = {
-                        navController.navigate(Screen.Home.route) {
-                            popUpTo(Screen.Home.route) { inclusive = true }
-                        }
-                        currentDestination = AppDestinations.HOME
-                    }
-                )
-            }
+            composable(Screen.Pindai.route) { CameraScanScreen() } // Ganti dengan screenmu
+            composable(Screen.Resep.route) { RecipeExploreScreen() } // Ganti dengan screenmu
+            composable(Screen.Tersimpan.route) { SavedRecipesScreen() } // Ganti dengan screenmu
 
             composable(
                 route = Screen.RecipeDetail.route,
                 arguments = listOf(navArgument("recipeId") { type = NavType.StringType })
-            ) { backStackEntry ->
-                val recipeId = backStackEntry.arguments?.getString("recipeId") ?: ""
-                RecipeDetailScreen(
-                    recipeId = recipeId,
-                    sharedViewModel = sharedViewModel,
-                    onBackClick = {
-                        navController.popBackStack()
-                    }
-                )
+            ) {
+                RecipeDetailScreen(navController)
             }
         }
     }
 }
 
 @Composable
-fun BauhausNavItem(
-    icon: ImageVector,
-    label: String,
-    selected: Boolean,
-    onClick: () -> Unit
-) {
-    Column(
-        modifier = Modifier
-            .width(56.dp)
-            .clickable(onClick = onClick)
-            .padding(vertical = 4.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Center
+fun BottomNavigationBar(navController: NavHostController, currentRoute: String?) {
+    NavigationBar(
+        containerColor = Color.White,
+        tonalElevation = 8.dp
     ) {
-        Icon(
-            imageVector = icon,
-            contentDescription = label,
-            modifier = Modifier.size(24.dp),
-            tint = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
+        val items = listOf(
+            Triple("Beranda", Screen.Beranda.route, Icons.Default.Home),
+            Triple("Pindai", Screen.Pindai.route, Icons.Default.CenterFocusStrong),
+            Triple("Resep", Screen.Resep.route, Icons.Default.RestaurantMenu),
+            Triple("Simpan", Screen.Tersimpan.route, Icons.Default.Bookmark)
         )
-        Spacer(modifier = Modifier.height(2.dp))
-        Text(
-            text = label,
-            style = MaterialTheme.typography.labelSmall,
-            color = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
-            maxLines = 1,
-            fontSize = androidx.compose.ui.unit.TextUnit(10f, androidx.compose.ui.unit.TextUnitType.Sp)
-        )
+
+        items.forEach { (label, route, icon) ->
+            NavigationBarItem(
+                selected = currentRoute == route,
+                onClick = {
+                    if (currentRoute != route) {
+                        navController.navigate(route) {
+                            // Menghindari penumpukan halaman di stack
+                            popUpTo(Screen.Beranda.route) { saveState = true }
+                            launchSingleTop = true
+                            restoreState = true
+                        }
+                    }
+                },
+                label = { Text(label, fontSize = 10.sp) },
+                icon = { Icon(icon, contentDescription = label) },
+                colors = NavigationBarItemDefaults.colors(
+                    selectedIconColor = Terracotta,
+                    selectedTextColor = Terracotta,
+                    indicatorColor = Terracotta.copy(alpha = 0.1f)
+                )
+            )
+        }
     }
 }
 
-enum class AppDestinations {
-    HOME,
-    FRIDGE,
-    CAMERA,
-    FAVORITES,
-    PROFILE
+// Fungsi bantu untuk cek apakah Navbar harus muncul
+private fun shouldShowBottomBar(route: String?): Boolean {
+    return route in listOf(
+        Screen.Beranda.route,
+        Screen.Pindai.route,
+        Screen.Resep.route,
+        Screen.Tersimpan.route
+    )
 }

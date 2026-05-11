@@ -7,141 +7,73 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.sp
 
 /**
- * Bauhaus Typography System
- * Uses Space Grotesk for headlines (bold, geometric)
- * Uses Inter for body copy (clean, functional)
+ * Chefly Typography System
+ * Display/Headers: Outfit
+ * Body/Content: Inter
+ * Mono/Metadata: JetBrains Mono
  */
 
-// Define font families
-private val SpaceGrotesk = FontFamily.Default // System default (can be customized with custom fonts)
-private val InterFont = FontFamily.Default
+// Define font families - Using Default as fallback if custom fonts aren't bundled yet
+private val Outfit = FontFamily.Default
+private val Inter = FontFamily.Default
+private val JetBrainsMono = FontFamily.Default
 
-val BauhausTypography = Typography(
-    // Display - Large headlines (Bauhaus bold)
+val CheflyTypography = Typography(
+    // Display (Recipe Titles): clamp(1.5rem, 5vw, 2rem) -> approx 32sp
     displayLarge = TextStyle(
-        fontFamily = SpaceGrotesk,
-        fontWeight = FontWeight.Black,
-        fontSize = 57.sp,
-        lineHeight = 64.sp,
-        letterSpacing = (-0.5).sp,
-        fontStyle = androidx.compose.ui.text.font.FontStyle.Italic
-    ),
-
-    displayMedium = TextStyle(
-        fontFamily = SpaceGrotesk,
-        fontWeight = FontWeight.Black,
-        fontSize = 45.sp,
-        lineHeight = 52.sp,
-        letterSpacing = 0.sp,
-        fontStyle = androidx.compose.ui.text.font.FontStyle.Italic
-    ),
-
-    displaySmall = TextStyle(
-        fontFamily = SpaceGrotesk,
-        fontWeight = FontWeight.Black,
-        fontSize = 36.sp,
-        lineHeight = 44.sp,
-        letterSpacing = 0.sp,
-        fontStyle = androidx.compose.ui.text.font.FontStyle.Italic
-    ),
-
-    // Headline - Section titles
-    headlineLarge = TextStyle(
-        fontFamily = SpaceGrotesk,
-        fontWeight = FontWeight.Bold,
+        fontFamily = Outfit,
+        fontWeight = FontWeight.SemiBold,
         fontSize = 32.sp,
         lineHeight = 40.sp,
-        letterSpacing = 0.sp
+        letterSpacing = (-0.02).sp
     ),
 
+    // Heading 1 (Screen Titles): 1.25rem (20px)
+    headlineLarge = TextStyle(
+        fontFamily = Outfit,
+        fontWeight = FontWeight.Medium,
+        fontSize = 20.sp,
+        lineHeight = 28.sp
+    ),
+
+    // Heading 2 (Section Headers): 1.125rem (18px)
     headlineMedium = TextStyle(
-        fontFamily = SpaceGrotesk,
-        fontWeight = FontWeight.Bold,
-        fontSize = 28.sp,
-        lineHeight = 36.sp,
-        letterSpacing = 0.sp
-    ),
-
-    headlineSmall = TextStyle(
-        fontFamily = SpaceGrotesk,
-        fontWeight = FontWeight.Bold,
-        fontSize = 24.sp,
-        lineHeight = 32.sp,
-        letterSpacing = 0.sp
-    ),
-
-    // Title - Card/component titles
-    titleLarge = TextStyle(
-        fontFamily = SpaceGrotesk,
-        fontWeight = FontWeight.SemiBold,
-        fontSize = 22.sp,
-        lineHeight = 28.sp,
-        letterSpacing = 0.sp
-    ),
-
-    titleMedium = TextStyle(
-        fontFamily = SpaceGrotesk,
-        fontWeight = FontWeight.SemiBold,
-        fontSize = 16.sp,
-        lineHeight = 24.sp,
-        letterSpacing = 0.15.sp
-    ),
-
-    titleSmall = TextStyle(
-        fontFamily = SpaceGrotesk,
+        fontFamily = Outfit,
         fontWeight = FontWeight.Medium,
-        fontSize = 14.sp,
-        lineHeight = 20.sp,
-        letterSpacing = 0.1.sp
+        fontSize = 18.sp,
+        lineHeight = 26.sp
     ),
 
-    // Body - Main content text
+    // Body (Instructions, Descriptions): 1rem (16px)
     bodyLarge = TextStyle(
-        fontFamily = InterFont,
+        fontFamily = Inter,
         fontWeight = FontWeight.Normal,
         fontSize = 16.sp,
-        lineHeight = 24.sp,
-        letterSpacing = 0.5.sp
+        lineHeight = 26.sp
     ),
 
+    // Small/Meta (Cook Time, Servings): 0.875rem (14px)
     bodyMedium = TextStyle(
-        fontFamily = InterFont,
+        fontFamily = Inter,
         fontWeight = FontWeight.Normal,
         fontSize = 14.sp,
-        lineHeight = 20.sp,
-        letterSpacing = 0.25.sp
+        lineHeight = 20.sp
     ),
 
-    bodySmall = TextStyle(
-        fontFamily = InterFont,
-        fontWeight = FontWeight.Normal,
-        fontSize = 12.sp,
-        lineHeight = 16.sp,
-        letterSpacing = 0.4.sp
-    ),
-
-    // Label - Small UI text & buttons
-    labelLarge = TextStyle(
-        fontFamily = SpaceGrotesk,
-        fontWeight = FontWeight.Medium,
-        fontSize = 14.sp,
-        lineHeight = 20.sp,
-        letterSpacing = 0.1.sp
-    ),
-
+    // Mono (Percentages, Timers): 0.875rem (14px)
     labelMedium = TextStyle(
-        fontFamily = SpaceGrotesk,
-        fontWeight = FontWeight.Medium,
-        fontSize = 12.sp,
-        lineHeight = 16.sp,
-        letterSpacing = 0.5.sp
+        fontFamily = JetBrainsMono,
+        fontWeight = FontWeight.Normal,
+        fontSize = 14.sp,
+        lineHeight = 14.sp
     ),
 
+    // Label Caps: 11px, Outfit 600, letter-spacing +0.05em
     labelSmall = TextStyle(
-        fontFamily = SpaceGrotesk,
-        fontWeight = FontWeight.Bold,
+        fontFamily = Outfit,
+        fontWeight = FontWeight.SemiBold,
         fontSize = 11.sp,
-        lineHeight = 16.sp,
-        letterSpacing = 0.5.sp
+        lineHeight = 11.sp,
+        letterSpacing = 0.05.sp
     )
 )
