@@ -27,6 +27,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
 import com.skripsi.chefly.ui.theme.MutedSlate
+import com.skripsi.chefly.ui.theme.WarmIvory
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable

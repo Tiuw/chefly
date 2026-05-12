@@ -16,17 +16,29 @@ data class Recipe(
     val cookingMethod: String? = null
 ) {
     val ingredientList: List<String>
-        get() = ingredients // Langsung pakai ingredients karena data cleaned tidak ada
+        get() = ingredients
             .split(Regex("[,;:\n\\r\\-\\–]+"))
-            .map { it.trim().replace(Regex("\\s{2,}"), " ") }
+            .map { raw ->
+                raw.trim()
+                    .replace("_", " ") // Ganti underscore jadi spasi
+                    .replace(Regex("[\\[\\]\"']"), "") // Bersihkan karakter sampah jika ada
+                    .lowercase() // Kecilkan semua dulu agar seragam
+                    .replaceFirstChar { it.uppercase() } // KAPITALKAN HURUF PERTAMA
+            }
             .filter { it.isNotEmpty() }
 
     val stepList: List<String>
         get() {
-            val byNewline = steps.split(Regex("\\r?\\n")).map { it.trim() }.filter { it.isNotEmpty() }
-            if (byNewline.size > 1) return byNewline
-            val byNumbered = steps.split(Regex("\\d+\\)\\s*|\\d+\\.\\s*")).map { it.trim() }.filter { it.isNotEmpty() }
-            if (byNumbered.size > 1) return byNumbered
-            return steps.split(Regex("\\.\\s+")).map { it.trim() }.filter { it.isNotEmpty() }
+            val rawSteps = steps.split(Regex("\\r?\\n|\\.\\s+"))
+                .map { it.trim() }
+                .filter { it.isNotEmpty() }
+
+            return rawSteps.map { step ->
+                step.replace(Regex("^\\d+[\\). ]+\\s*"), "") // Hapus "1) ", "2. ", dll
+                    .replace(Regex("^-\\s*"), "") // Hapus dash jika ada
+                    .lowercase() // Kecilkan semua dulu
+                    .replaceFirstChar { it.uppercase() } // KAPITALKAN HURUF PERTAMA
+                    .trim()
+            }
         }
 }

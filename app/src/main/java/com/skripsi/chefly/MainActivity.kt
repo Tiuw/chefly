@@ -25,6 +25,8 @@ import com.skripsi.chefly.ui.navigation.Screen
 import com.skripsi.chefly.ui.screens.* // Pastikan semua screen diimport
 import com.skripsi.chefly.ui.theme.CheflyTheme
 import dagger.hilt.android.AndroidEntryPoint
+import androidx.hilt.navigation.compose.hiltViewModel
+import com.skripsi.chefly.ui.viewmodel.RecipeDetailViewModel
 
 // Warna sesuai palette desainmu
 val Terracotta = Color(0xFFE36C47)
@@ -86,8 +88,19 @@ fun MainScreen() {
             composable(
                 route = Screen.RecipeDetail.route,
                 arguments = listOf(navArgument("recipeId") { type = NavType.StringType })
-            ) {
-                RecipeDetailScreen(navController)
+            ) { backStackEntry ->
+                // 1. Ambil recipeId dari arguments navigasi
+                val recipeId = backStackEntry.arguments?.getString("recipeId") ?: ""
+
+                // 2. Inisialisasi ViewModel menggunakan Hilt
+                val viewModel: RecipeDetailViewModel = hiltViewModel()
+
+                // 3. Masukkan ke dalam fungsi Screen
+                RecipeDetailScreen(
+                    navController = navController,
+                    recipeId = recipeId,
+                    viewModel = viewModel
+                )
             }
         }
     }
