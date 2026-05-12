@@ -13,6 +13,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
@@ -40,11 +41,24 @@ fun HomeScreen(
     Scaffold(
         containerColor = WarmIvory,
         topBar = {
-            CenterAlignedTopAppBar(
+            // Menggunakan TopAppBar (Default Aligned Left)
+            TopAppBar(
                 title = {
-                    Text("Chefly", color = Terracotta, fontWeight = FontWeight.Bold, fontSize = 24.sp)
+                    Text(
+                        text = "Chefly",
+                        color = Terracotta,
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 24.sp,
+                        // Memberikan padding kiri agar sejajar dengan konten grid di bawah
+                        modifier = Modifier.padding(start = 8.dp)
+                    )
                 },
-                colors = TopAppBarDefaults.centerAlignedTopAppBarColors(containerColor = Color.White)
+                colors = TopAppBarDefaults.topAppBarColors(
+                    containerColor = Color.White, // Menjaga kontras logo di atas putih
+                    scrolledContainerColor = Color.White
+                ),
+                // Efek elevasi halus saat di-scroll
+                modifier = Modifier.shadow(2.dp)
             )
         }
     ) { padding ->

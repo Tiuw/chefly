@@ -3,7 +3,6 @@ package com.skripsi.chefly
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
-import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
@@ -14,6 +13,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
+import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavHostController
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
@@ -22,21 +23,22 @@ import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import com.skripsi.chefly.ui.navigation.Screen
-import com.skripsi.chefly.ui.screens.* // Pastikan semua screen diimport
+import com.skripsi.chefly.ui.screens.*
+import com.skripsi.chefly.ui.screens.onboarding.OnboardingScreen
+import com.skripsi.chefly.ui.screens.splash.SplashScreen
 import com.skripsi.chefly.ui.theme.CheflyTheme
-import dagger.hilt.android.AndroidEntryPoint
-import androidx.hilt.navigation.compose.hiltViewModel
 import com.skripsi.chefly.ui.viewmodel.RecipeDetailViewModel
-
-// Warna sesuai palette desainmu
-val Terracotta = Color(0xFFE36C47)
+import dagger.hilt.android.AndroidEntryPoint
 
 @AndroidEntryPoint
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
+
+        val splashScreen = installSplashScreen()
+
         super.onCreate(savedInstanceState)
         setContent {
-            CheflyTheme { // Ganti dengan nama theme projectmu
+            CheflyTheme {
                 MainScreen()
             }
         }
@@ -47,13 +49,11 @@ class MainActivity : ComponentActivity() {
 fun MainScreen() {
     val navController = rememberNavController()
 
-    // Memantau route yang sedang aktif secara real-time
     val navBackStackEntry by navController.currentBackStackEntryAsState()
     val currentRoute = navBackStackEntry?.destination?.route
 
     Scaffold(
         bottomBar = {
-            // Navbar hanya muncul di halaman utama (Beranda, Pindai, Resep, Tersimpan)
             if (shouldShowBottomBar(currentRoute)) {
                 BottomNavigationBar(navController, currentRoute)
             }
@@ -61,16 +61,27 @@ fun MainScreen() {
     ) { innerPadding ->
         NavHost(
             navController = navController,
-            startDestination = Screen.Beranda.route,
+            // 1. Ganti startDestination ke rute Splash
+            startDestination = "splash",
             modifier = Modifier.padding(innerPadding)
         ) {
+            // --- 2. Tambahkan Route Splash Screen ---
+            composable("splash") {
+                SplashScreen(onTimeout = {
+                    // Pindah ke Onboarding setelah splash selesai
+                    navController.navigate(Screen.Onboarding.route) {
+                        popUpTo("splash") { inclusive = true }
+                    }
+                })
+            }
+
+            // --- Halaman Utama ---
             composable(Screen.Beranda.route) {
                 HomeScreen(
                     onScanClick = { navController.navigate(Screen.Pindai.route) },
                     onRecipeClick = { id ->
                         navController.navigate(Screen.RecipeDetail.createRoute(id))
                     },
-                    // FIX: Navigasi Lihat Semua agar Navbar ikut berubah
                     onSeeAllClick = {
                         navController.navigate(Screen.Resep.route) {
                             popUpTo(Screen.Beranda.route) { saveState = true }
@@ -81,26 +92,32 @@ fun MainScreen() {
                 )
             }
 
-            composable(Screen.Pindai.route) { CameraScanScreen() } // Ganti dengan screenmu
-            composable(Screen.Resep.route) { RecipeExploreScreen() } // Ganti dengan screenmu
-            composable(Screen.Tersimpan.route) { SavedRecipesScreen() } // Ganti dengan screenmu
+            composable(Screen.Pindai.route) { CameraScanScreen() }
+            composable(Screen.Resep.route) { RecipeExploreScreen() }
+            composable(Screen.Tersimpan.route) { SavedRecipesScreen() }
 
+            // --- Halaman Detail ---
             composable(
                 route = Screen.RecipeDetail.route,
                 arguments = listOf(navArgument("recipeId") { type = NavType.StringType })
             ) { backStackEntry ->
-                // 1. Ambil recipeId dari arguments navigasi
                 val recipeId = backStackEntry.arguments?.getString("recipeId") ?: ""
-
-                // 2. Inisialisasi ViewModel menggunakan Hilt
                 val viewModel: RecipeDetailViewModel = hiltViewModel()
 
-                // 3. Masukkan ke dalam fungsi Screen
                 RecipeDetailScreen(
                     navController = navController,
                     recipeId = recipeId,
                     viewModel = viewModel
                 )
+            }
+
+            // --- Onboarding ---
+            composable(Screen.Onboarding.route) {
+                OnboardingScreen(onFinish = {
+                    navController.navigate(Screen.Beranda.route) {
+                        popUpTo(Screen.Onboarding.route) { inclusive = true }
+                    }
+                })
             }
         }
     }
@@ -108,6 +125,9 @@ fun MainScreen() {
 
 @Composable
 fun BottomNavigationBar(navController: NavHostController, currentRoute: String?) {
+    // Gunakan Color(0xFFE36C47) langsung atau panggil dari Theme agar konsisten
+    val themeTerracotta = Color(0xFFE36C47)
+
     NavigationBar(
         containerColor = Color.White,
         tonalElevation = 8.dp
@@ -125,7 +145,6 @@ fun BottomNavigationBar(navController: NavHostController, currentRoute: String?)
                 onClick = {
                     if (currentRoute != route) {
                         navController.navigate(route) {
-                            // Menghindari penumpukan halaman di stack
                             popUpTo(Screen.Beranda.route) { saveState = true }
                             launchSingleTop = true
                             restoreState = true
@@ -135,17 +154,19 @@ fun BottomNavigationBar(navController: NavHostController, currentRoute: String?)
                 label = { Text(label, fontSize = 10.sp) },
                 icon = { Icon(icon, contentDescription = label) },
                 colors = NavigationBarItemDefaults.colors(
-                    selectedIconColor = Terracotta,
-                    selectedTextColor = Terracotta,
-                    indicatorColor = Terracotta.copy(alpha = 0.1f)
+                    selectedIconColor = themeTerracotta,
+                    selectedTextColor = themeTerracotta,
+                    indicatorColor = themeTerracotta.copy(alpha = 0.1f),
+                    unselectedIconColor = Color.Gray,
+                    unselectedTextColor = Color.Gray
                 )
             )
         }
     }
 }
 
-// Fungsi bantu untuk cek apakah Navbar harus muncul
 private fun shouldShowBottomBar(route: String?): Boolean {
+    // Bottom bar TIDAK boleh muncul di DetailScreen atau Onboarding
     return route in listOf(
         Screen.Beranda.route,
         Screen.Pindai.route,

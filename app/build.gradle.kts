@@ -53,6 +53,9 @@ dependencies {
     // icons
     implementation("androidx.compose.material:material-icons-extended")
 
+    // splash screen
+    implementation("androidx.core:core-splashscreen:1.0.1")
+
     // Tambahkan ini untuk hiltViewModel() di Compose
     implementation("androidx.hilt:hilt-navigation-compose:1.2.0")
 
