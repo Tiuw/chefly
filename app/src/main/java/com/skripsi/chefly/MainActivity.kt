@@ -92,9 +92,22 @@ fun MainScreen() {
                 )
             }
 
-            composable(Screen.Pindai.route) { CameraScanScreen() }
-            composable(Screen.Resep.route) { RecipeExploreScreen() }
-            composable(Screen.Tersimpan.route) { SavedRecipesScreen() }
+            composable(Screen.Pindai.route) { CameraScreen() }
+
+            composable(Screen.Resep.route) {
+                RecipeScreen(
+                    onRecipeClick = { id ->
+                        // Navigasi ke halaman detail
+                        navController.navigate(Screen.RecipeDetail.createRoute(id))
+                    },
+                    onScanClick = {
+                        // Navigasi ke halaman kamera/pindai
+                        navController.navigate(Screen.Pindai.route)
+                    }
+                )
+            }
+
+            composable(Screen.Tersimpan.route) { SavedScreen() }
 
             // --- Halaman Detail ---
             composable(

@@ -29,7 +29,7 @@ val DeepCharcoal = Color(0xFF1A1A1A)
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun CameraScanScreen() {
+fun CameraScreen() {
     Scaffold(
         topBar = { ScanTopBar() },
         bottomBar = { ScanBottomNav() }
@@ -284,5 +284,5 @@ fun ScanBottomNav() {
 @Preview(showBackground = true, device = "spec:width=430dp,height=932dp")
 @Composable
 fun PreviewCameraScan() {
-    CameraScanScreen()
+    CameraScreen()
 }

@@ -7,21 +7,26 @@ import com.skripsi.chefly.data.local.AppDatabase
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.util.concurrent.ConcurrentHashMap
+import javax.inject.Inject
+import javax.inject.Singleton
 
 /**
  * Singleton repository with pagination support.
  * Reads from Room (prepackaged DB) in background threads.
  */
-object RecipeRepository {
-    private var initialized = false
-    private var cacheWarm = false
-    private val recipeTokenMap: MutableMap<String, Set<String>> = ConcurrentHashMap()
-    private val recipeIngredientTokenMap: MutableMap<String, Set<String>> = ConcurrentHashMap()
-    private val cachedRecipeById: MutableMap<String, Recipe> = ConcurrentHashMap()
-    private var cachedAllRecipes: List<Recipe>? = null
-    private val TAG = "RecipeRepository"
-    private const val PAGE_SIZE = 30
+@Singleton
+class RecipeRepository @Inject constructor(){
 
+    companion object {
+        private var initialized = false
+        private var cacheWarm = false
+        private val recipeTokenMap: MutableMap<String, Set<String>> = ConcurrentHashMap()
+        private val recipeIngredientTokenMap: MutableMap<String, Set<String>> = ConcurrentHashMap()
+        private val cachedRecipeById: MutableMap<String, Recipe> = ConcurrentHashMap()
+        private var cachedAllRecipes: List<Recipe>? = null
+        private val TAG = "RecipeRepository"
+        private const val PAGE_SIZE = 30
+    }
     private fun getDb(context: Context) = AppDatabase.getDatabase(context)
     private fun getDao(context: Context) = getDb(context).recipeDao()
 
@@ -38,12 +43,6 @@ object RecipeRepository {
         }
     }
 
-    suspend fun preloadAllRecipes(context: Context) = withContext(Dispatchers.IO) {
-        if (cacheWarm) return@withContext
-        getAllRecipesSuspend(context)
-        cacheWarm = true
-    }
-
     suspend fun getRecipeCount(context: Context): Int = withContext(Dispatchers.IO) {
         try {
             getDao(context).getAllOnceCount()
@@ -53,13 +52,12 @@ object RecipeRepository {
         }
     }
 
-    suspend fun getRecipesPaged(context: Context, pageNumber: Int): List<Recipe> =
+    suspend fun getRecipesPaged(context: Context, category: String, pageNumber: Int): List<Recipe> =
         withContext(Dispatchers.IO) {
             try {
                 val offset = pageNumber * PAGE_SIZE
                 val limit = PAGE_SIZE
-                val entities = getDao(context).getRecipesPaginated(limit, offset)
-                // Best Practice: map toDomain()
+                val entities = getDao(context).getRecipesByCategoryPaginated(category, limit, offset)
                 entities.map { it.toDomain() }
             } catch (e: Exception) {
                 Log.e(TAG, "Error loading recipes for page $pageNumber: ${e.message}")
@@ -78,15 +76,48 @@ object RecipeRepository {
             }
         }
 
+    suspend fun searchRecipesWithFilters(
+        context: Context,
+        query: String,
+        category: String,
+        method: String
+    ): List<Recipe> = withContext(Dispatchers.IO) {
+        try {
+            // 1. Pecah query menjadi potongan kata (misal: "cabe merah" jadi ["cabe", "merah"])
+            val words = query.trim().split(Regex("\\s+")).filter { it.length > 1 }
+
+            // 2. Jika hanya 1 kata, gunakan kueri biasa
+            if (words.size <= 1) {
+                val entities = getDao(context).searchByKeywordCategoryAndMethod(query.trim(), category, method)
+                return@withContext entities.map { it.toDomain() }
+            }
+
+            // 3. Jika banyak kata, kita ambil semua resep di kategori tersebut lalu filter di Kotlin
+            // (Lebih akurat untuk pencarian bahan yang kompleks)
+            val allInContext = getDao(context).getRecipesWithFilters(category, method, 500, 0)
+
+            allInContext.filter { entity ->
+                val content = "${entity.title} ${entity.uiIngredients}".lowercase().replace("_", " ")
+                // Pastikan SEMUA kata yang dicari ada di dalam judul atau bahan
+                words.all { word -> content.contains(word.lowercase()) }
+            }.map { it.toDomain() }
+
+        } catch (e: Exception) {
+            Log.e("RecipeRepository", "Error: ${e.message}")
+            emptyList()
+        }
+    }
+
     suspend fun getRecipesByCategory(context: Context, category: String): List<Recipe> =
         withContext(Dispatchers.IO) {
             val q = category.trim()
             if (q.isBlank()) return@withContext emptyList()
 
             try {
-                val startedAt = System.currentTimeMillis()
-                val recipes = getDao(context).searchByCategory(q).map { entity ->
+                // Kita ambil page pertama (limit 30) untuk inisialisasi kategori
+                val recipes = getDao(context).getRecipesByCategoryPaginated(q, PAGE_SIZE, 0).map { entity ->
                     val recipe = entity.toDomain()
+                    // ... logic caching tetap sama ...
                     val id = recipe.id
                     cachedRecipeById[id] = recipe
                     recipeTokenMap[id] = computeTokensForRecipe(recipe)
@@ -100,6 +131,27 @@ object RecipeRepository {
                 emptyList()
             }
         }
+
+    suspend fun getRecipesPaged(
+        context: Context,
+        category: String,
+        method: String, // Tambahkan parameter method
+        pageNumber: Int
+    ): List<Recipe> = withContext(Dispatchers.IO) {
+        try {
+            val offset = pageNumber * PAGE_SIZE
+            val entities = getDao(context).getRecipesWithFilters(
+                category = category,
+                method = method,
+                limit = PAGE_SIZE,
+                offset = offset
+            )
+            entities.map { it.toDomain() }
+        } catch (e: Exception) {
+            Log.e(TAG, "Error loading filtered recipes: ${e.message}")
+            emptyList()
+        }
+    }
 
     private suspend fun getAllRecipesSuspend(context: Context): List<Recipe> = withContext(Dispatchers.IO) {
         if (cachedAllRecipes != null) return@withContext cachedAllRecipes!!
@@ -133,7 +185,10 @@ object RecipeRepository {
     suspend fun searchRecipesByQuery(context: Context, query: String): List<Recipe> =
         withContext(Dispatchers.IO) {
             val q = query.trim()
-            if (q.isBlank()) return@withContext getRecipesPaged(context, 0)
+
+            // PERBAIKAN: Tambahkan string kosong "" sebagai argumen kategori
+            // agar sesuai dengan getRecipesPaged(context, category, pageNumber)
+            if (q.isBlank()) return@withContext getRecipesPaged(context, "", 0)
 
             try {
                 val entities = getDao(context).searchByKeyword(q)

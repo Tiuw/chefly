@@ -15,8 +15,37 @@ interface RecipeDao {
     @Query("SELECT COUNT(*) FROM recipes")
     suspend fun getAllOnceCount(): Int
 
-    @Query("SELECT * FROM recipes ORDER BY loves DESC, id DESC LIMIT :limit OFFSET :offset")
-    suspend fun getRecipesPaginated(limit: Int, offset: Int): List<RecipeEntity>
+
+    @Query("SELECT * FROM recipes WHERE LOWER(category) LIKE '%' || LOWER(:category) || '%' ORDER BY loves DESC, id DESC LIMIT 50")
+    suspend fun searchByCategoryLimited(category: String): List<RecipeEntity>
+
+    @Query("""
+    SELECT * FROM recipes 
+    WHERE LOWER(category) LIKE '%' || LOWER(:category) || '%' 
+    ORDER BY loves DESC, id DESC 
+    LIMIT :limit OFFSET :offset
+""")
+    suspend fun getRecipesByCategoryPaginated(
+        category: String,
+        limit: Int,
+        offset: Int
+    ): List<RecipeEntity>
+
+    @Query("""
+    SELECT * FROM recipes 
+    WHERE (
+        LOWER(title) LIKE '%' || LOWER(:query) || '%' 
+        OR REPLACE(LOWER(ui_ingredients), '_', ' ') LIKE '%' || LOWER(:query) || '%'
+    )
+    AND (:category = 'Semua' OR LOWER(category) LIKE '%' || LOWER(:category) || '%')
+    AND (:method = 'Semua' OR LOWER(primary_cooking_method) = LOWER(:method))
+    ORDER BY loves DESC LIMIT 100
+""")
+    suspend fun searchByKeywordCategoryAndMethod(
+        query: String,
+        category: String,
+        method: String
+    ): List<RecipeEntity>
 
     @Query(
         """
@@ -25,9 +54,34 @@ interface RecipeDao {
            OR LOWER(category) LIKE '%' || LOWER(:query) || '%'
            OR LOWER(ui_ingredients) LIKE '%' || LOWER(:query) || '%'
         ORDER BY loves DESC, id DESC
+        LIMIT 100
         """
     )
     suspend fun searchByKeyword(query: String): List<RecipeEntity>
+
+    @Query("""
+    SELECT * FROM recipes 
+    WHERE (:category = 'Semua' OR LOWER(category) LIKE '%' || LOWER(:category) || '%') 
+    AND (:method = 'Semua' OR LOWER(primary_cooking_method) = LOWER(:method))
+    ORDER BY loves DESC, id DESC 
+    LIMIT :limit OFFSET :offset
+""")
+    suspend fun getRecipesWithFilters(
+        category: String,
+        method: String,
+        limit: Int,
+        offset: Int
+    ): List<RecipeEntity>
+
+    @Query("""
+    SELECT * FROM recipes 
+    WHERE (LOWER(title) LIKE '%' || LOWER(:query) || '%' 
+       OR LOWER(ui_ingredients) LIKE '%' || LOWER(:query) || '%' 
+       OR LOWER(category) LIKE '%' || LOWER(:query) || '%')
+    AND (:method = 'Semua' OR LOWER(primary_cooking_method) = LOWER(:method))
+    ORDER BY loves DESC LIMIT 100
+""")
+    suspend fun searchByKeywordAndMethod(query: String, method: String): List<RecipeEntity>
 
     @Query(
         """

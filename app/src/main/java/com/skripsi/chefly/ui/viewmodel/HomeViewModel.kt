@@ -1,6 +1,8 @@
 package com.skripsi.chefly.ui.viewmodel
 
+import android.app.Application
 import android.content.Context
+import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.skripsi.chefly.data.repository.RecipeRepository
@@ -21,8 +23,12 @@ data class RecipeUiModel(
 
 @HiltViewModel
 class HomeViewModel @Inject constructor(
-    @ApplicationContext private val context: Context
-) : ViewModel() {
+    private val repository: RecipeRepository, // Gunakan instance ini
+    application: Application
+) : AndroidViewModel(application) {
+
+    // Gunakan getApplication() untuk mendapatkan context secara aman
+    private val context = getApplication<Application>().applicationContext
 
     private val _suggestedRecipes = MutableStateFlow<List<RecipeUiModel>>(emptyList())
     val suggestedRecipes: StateFlow<List<RecipeUiModel>> = _suggestedRecipes.asStateFlow()
@@ -38,13 +44,15 @@ class HomeViewModel @Inject constructor(
         viewModelScope.launch {
             _isLoading.value = true
             try {
-                RecipeRepository.init(context)
+                // PERBAIKAN: Panggil melalui variabel 'repository', bukan class 'RecipeRepository'
+                repository.init(context)
 
                 // Cek jumlah total di DB
-                val total = RecipeRepository.getRecipeCount(context)
+                val total = repository.getRecipeCount(context)
                 android.util.Log.d("DEBUG_CHEF", "Total data di DB: $total")
 
-                val recipes = RecipeRepository.getRecommendedRecipes(context, limit = 10)
+                // Ambil rekomendasi
+                val recipes = repository.getRecommendedRecipes(context, limit = 10)
                 android.util.Log.d("DEBUG_CHEF", "Data yang didapat: ${recipes.size}")
 
                 _suggestedRecipes.value = recipes.map { recipe ->
