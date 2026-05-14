@@ -3,6 +3,7 @@ package com.skripsi.chefly.di
 import android.content.Context
 import com.skripsi.chefly.data.local.AppDatabase
 import com.skripsi.chefly.data.local.RecipeDao
+import com.skripsi.chefly.data.repository.RecipeRepository
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
@@ -16,12 +17,18 @@ object DatabaseModule {
 
     @Provides
     @Singleton
-    fun provideAppDatabase(@ApplicationContext context: Context): AppDatabase {
+    fun provideDatabase(@ApplicationContext context: Context): AppDatabase {
         return AppDatabase.getDatabase(context)
     }
 
     @Provides
     fun provideRecipeDao(database: AppDatabase): RecipeDao {
         return database.recipeDao()
+    }
+
+    @Provides
+    @Singleton
+    fun provideRecipeRepository(): RecipeRepository {
+        return com.skripsi.chefly.data.repository.RecipeRepository()
     }
 }

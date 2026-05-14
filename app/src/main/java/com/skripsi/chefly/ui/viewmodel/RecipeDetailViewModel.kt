@@ -15,6 +15,7 @@ import javax.inject.Inject
 
 @HiltViewModel
 class RecipeDetailViewModel @Inject constructor(
+    private val repository: RecipeRepository, // WAJIB DISUNTIKKAN DI SINI
     @ApplicationContext private val context: Context
 ) : ViewModel() {
 
@@ -33,11 +34,11 @@ class RecipeDetailViewModel @Inject constructor(
                 _isLoading.value = true
                 _loadError.value = null
 
-                // Ambil data langsung dari Repository
-                val result = RecipeRepository.getRecipeById(context, recipeId)
+                // PERBAIKAN: Panggil melalui variabel 'repository' (huruf kecil)
+                val result = repository.getRecipeById(context, recipeId)
 
                 if (result != null) {
-                    _recipe.value = result
+                    _recipe.value = result // Sekarang tipe datanya sinkron (Recipe)
                 } else {
                     _loadError.value = "Resep tidak ditemukan"
                 }

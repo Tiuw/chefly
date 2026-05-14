@@ -28,7 +28,7 @@ val OnSurface = Color(0xFF241916)
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun SavedRecipesScreen() {
+fun SavedScreen() {
     Scaffold(
         topBar = { SavedTopBar() },
         bottomBar = { SavedBottomNavigation() },
@@ -250,5 +250,5 @@ data class RecipeItem(val title: String, val imageUrl: String)
 @Preview(showBackground = true, device = "spec:width=430dp,height=932dp")
 @Composable
 fun SavedRecipesPreview() {
-    SavedRecipesScreen()
+    SavedScreen()
 }
