@@ -92,7 +92,23 @@ fun MainScreen() {
                 )
             }
 
-            composable(Screen.Pindai.route) { CameraScreen() }
+            composable(Screen.Pindai.route) {
+                CameraScreen(onAddMoreClick = {
+                    navController.navigate("tambah_bahan")
+                })
+            }
+
+            // Tambahkan rute untuk AddIngredientScreen
+            composable("tambah_bahan") {
+                AddIngredientScreen(
+                    onBackClick = { navController.popBackStack() }, // Kembali ke kamera
+                    onNavigateToResult = { selectedIngredients ->
+                        // Simpan logic navigasi ke hasil rekomendasi di sini
+                        // Untuk sementara bisa log dulu atau arahkan ke screen hasil jika sudah ada
+                        println("Bahan yang dipilih: $selectedIngredients")
+                    }
+                )
+            }
 
             composable(Screen.Resep.route) {
                 RecipeScreen(

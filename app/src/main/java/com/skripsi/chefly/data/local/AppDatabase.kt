@@ -7,12 +7,21 @@ import androidx.room.Room
 import androidx.room.RoomDatabase
 import androidx.sqlite.db.SupportSQLiteDatabase
 import com.skripsi.chefly.data.local.entity.RecipeEntity
+import com.skripsi.chefly.data.local.entity.TfidfDataEntity
+import com.skripsi.chefly.data.local.entity.IdfDictionaryEntity
 
-@Database(entities = [RecipeEntity::class], version = 3, exportSchema = false) // Naikkan versi ke 3
+@Database(
+    entities = [
+        RecipeEntity::class,
+        TfidfDataEntity::class,
+        IdfDictionaryEntity::class
+    ],
+    version = 4,
+    exportSchema = false
+)
 abstract class AppDatabase : RoomDatabase() {
     abstract fun recipeDao(): RecipeDao
 
-    // Di dalam class AppDatabase
     companion object {
         @Volatile
         private var INSTANCE: AppDatabase? = null
@@ -22,20 +31,39 @@ abstract class AppDatabase : RoomDatabase() {
                 val instance = Room.databaseBuilder(
                     context.applicationContext,
                     AppDatabase::class.java,
-                    "chefly_debug_log.db" // Gunakan nama baru lagi untuk reset total
+                    "chefly_production.db"
                 )
                     .createFromAsset("database/recipes.db")
                     .addCallback(object : RoomDatabase.Callback() {
                         override fun onOpen(db: SupportSQLiteDatabase) {
                             super.onOpen(db)
                             Log.d("SQL_DEBUG", "Database berhasil dibuka. Mengecek tabel...")
-                            val cursor = db.query("PRAGMA table_info(recipes)")
-                            while (cursor.moveToNext()) {
-                                val name = cursor.getString(cursor.getColumnIndex("name"))
-                                val type = cursor.getString(cursor.getColumnIndex("type"))
-                                val notNull = cursor.getInt(cursor.getColumnIndex("notnull"))
-                                val pk = cursor.getInt(cursor.getColumnIndex("pk"))
-                                Log.d("SQL_DEBUG", "Kolom: $name | Tipe: $type | NotNull: $notNull | PK: $pk")
+
+                            val tables = listOf("recipes", "tfidf_data", "idf_dictionary")
+                            tables.forEach { tableName ->
+                                val cursor = db.query("PRAGMA table_info($tableName)")
+
+                                // Gunakan use {} agar cursor otomatis tertutup (mencegah memory leak)
+                                cursor.use { c ->
+                                    if (c.count > 0) {
+                                        Log.d("SQL_DEBUG", "--- Struktur Tabel: $tableName ---")
+
+                                        // Ambil index kolom satu kali saja di luar loop
+                                        val nameIdx = c.getColumnIndex("name")
+                                        val typeIdx = c.getColumnIndex("type")
+
+                                        while (c.moveToNext()) {
+                                            // Validasi apakah index ditemukan
+                                            if (nameIdx != -1 && typeIdx != -1) {
+                                                val name = c.getString(nameIdx)
+                                                val type = c.getString(typeIdx)
+                                                Log.d("SQL_DEBUG", "Kolom: $name | Tipe: $type")
+                                            }
+                                        }
+                                    } else {
+                                        Log.e("SQL_DEBUG", "Tabel $tableName TIDAK DITEMUKAN!")
+                                    }
+                                }
                             }
                         }
                     })

@@ -1,7 +1,9 @@
 package com.skripsi.chefly.data.local
 
 import androidx.room.*
+import com.skripsi.chefly.data.local.entity.IdfDictionaryEntity
 import com.skripsi.chefly.data.local.entity.RecipeEntity
+import com.skripsi.chefly.data.local.entity.TfidfDataEntity
 import kotlinx.coroutines.flow.Flow
 
 @Dao
@@ -94,6 +96,27 @@ interface RecipeDao {
 
     @Query("SELECT * FROM recipes ORDER BY loves DESC LIMIT :limit")
     suspend fun getRecommendedRecipes(limit: Int): List<RecipeEntity>
+
+    // --- Query untuk Tabel tfidf_data ---
+
+    @Query("SELECT * FROM tfidf_data")
+    suspend fun getAllTfidfData(): List<TfidfDataEntity>
+
+    @Query("SELECT * FROM tfidf_data WHERE recipe_id = :id LIMIT 1")
+    suspend fun getTfidfByRecipeId(id: String): TfidfDataEntity?
+
+
+    // --- Query untuk Tabel idf_dictionary ---
+
+    @Query("SELECT * FROM idf_dictionary")
+    suspend fun getFullDictionary(): List<IdfDictionaryEntity>
+
+    @Query("SELECT idf_weight FROM idf_dictionary WHERE ingredient = :ingredient LIMIT 1")
+    suspend fun getIdfWeightByIngredient(ingredient: String): Double?
+
+    @Query("SELECT * FROM idf_dictionary WHERE ingredient IN (:ingredients)")
+    suspend fun getIdfWeightsForIngredients(ingredients: List<String>): List<IdfDictionaryEntity>
+
 
     @Query("SELECT * FROM recipes WHERE id = :id LIMIT 1")
     suspend fun getById(id: String): RecipeEntity?
