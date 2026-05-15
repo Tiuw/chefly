@@ -61,21 +61,19 @@ fun MainScreen() {
     ) { innerPadding ->
         NavHost(
             navController = navController,
-            // 1. Ganti startDestination ke rute Splash
             startDestination = "splash",
             modifier = Modifier.padding(innerPadding)
         ) {
-            // --- 2. Tambahkan Route Splash Screen ---
+            // --- Splash Screen ---
             composable("splash") {
                 SplashScreen(onTimeout = {
-                    // Pindah ke Onboarding setelah splash selesai
                     navController.navigate(Screen.Onboarding.route) {
                         popUpTo("splash") { inclusive = true }
                     }
                 })
             }
 
-            // --- Halaman Utama ---
+            // --- Home Screen ---
             composable(Screen.Beranda.route) {
                 HomeScreen(
                     onScanClick = { navController.navigate(Screen.Pindai.route) },
@@ -92,40 +90,55 @@ fun MainScreen() {
                 )
             }
 
+            // --- Camera/Scan Screen ---
             composable(Screen.Pindai.route) {
                 CameraScreen(onAddMoreClick = {
                     navController.navigate("tambah_bahan")
                 })
             }
 
-            // Tambahkan rute untuk AddIngredientScreen
+            // --- Add Ingredient Screen ---
             composable("tambah_bahan") {
                 AddIngredientScreen(
-                    onBackClick = { navController.popBackStack() }, // Kembali ke kamera
+                    onBackClick = { navController.popBackStack() },
                     onNavigateToResult = { selectedIngredients ->
-                        // Simpan logic navigasi ke hasil rekomendasi di sini
-                        // Untuk sementara bisa log dulu atau arahkan ke screen hasil jika sudah ada
+                        // Navigasi ke hasil rekomendasi
                         println("Bahan yang dipilih: $selectedIngredients")
                     }
                 )
             }
 
+            // --- All Recipes Screen ---
             composable(Screen.Resep.route) {
                 RecipeScreen(
                     onRecipeClick = { id ->
-                        // Navigasi ke halaman detail
                         navController.navigate(Screen.RecipeDetail.createRoute(id))
                     },
                     onScanClick = {
-                        // Navigasi ke halaman kamera/pindai
                         navController.navigate(Screen.Pindai.route)
                     }
                 )
             }
 
-            composable(Screen.Tersimpan.route) { SavedScreen() }
+            // Di dalam MainScreen() pada NavHost
+            composable(Screen.Tersimpan.route) {
+                SavedScreen(
+                    onRecipeClick = { id ->
+                        navController.navigate(Screen.RecipeDetail.createRoute(id))
+                    },
+                    onAddClick = {
+                        // PERBAIKAN: Navigasi ke RecipeScreen (Jelajah)
+                        navController.navigate(Screen.Resep.route) {
+                            // Pastikan navigasi ini dianggap sebagai perpindahan Tab
+                            popUpTo(Screen.Beranda.route) { saveState = true }
+                            launchSingleTop = true
+                            restoreState = true
+                        }
+                    }
+                )
+            }
 
-            // --- Halaman Detail ---
+            // --- Recipe Detail Screen ---
             composable(
                 route = Screen.RecipeDetail.route,
                 arguments = listOf(navArgument("recipeId") { type = NavType.StringType })

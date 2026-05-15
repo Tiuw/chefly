@@ -148,14 +148,15 @@ fun RecipeScreen(
                 )
             }
 
-            // 4. Grid Resep (Dataset 15.000 dimuat secara bertahap)
             items(
                 items = uiState.recipes,
-                key = { it.id } // Penting agar scroll tidak melompat
+                key = { it.id }
             ) { recipe ->
                 RecipeGridItem(
                     recipe = recipe,
                     onClick = { onRecipeClick(recipe.id) },
+                    // TAMBAHKAN INI: Sekarang Icon Hati bisa diklik langsung
+                    onFavoriteClick = { viewModel.toggleFavorite(recipe) },
                     modifier = Modifier.fillMaxWidth()
                 )
             }
@@ -303,8 +304,9 @@ fun CategoryCard(category: CategoryData, onClick: () -> Unit) {
 
 @Composable
 fun RecipeGridItem(
-    recipe: com.skripsi.chefly.data.Recipe, // UBAH: Gunakan Recipe, bukan RecipeEntity
+    recipe: com.skripsi.chefly.data.Recipe,
     onClick: () -> Unit,
+    onFavoriteClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     Column(modifier = modifier.clickable { onClick() }) {
@@ -318,32 +320,39 @@ fun RecipeGridItem(
                 model = ImageRequest.Builder(LocalContext.current)
                     .data(recipe.imageUrl)
                     .crossfade(true)
-                    .size(400, 400)
                     .build(),
                 contentDescription = null,
                 contentScale = ContentScale.Crop,
                 modifier = Modifier.fillMaxSize()
             )
-            // Tombol Favorite
+
+            // Surface untuk Tombol Tersimpan (Bookmark)
             Surface(
                 modifier = Modifier
                     .align(Alignment.TopEnd)
                     .padding(8.dp)
-                    .size(32.dp),
+                    .size(32.dp)
+                    .clickable(
+                        onClick = onFavoriteClick,
+                        indication = null,
+                        interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }
+                    ),
                 shape = CircleShape,
                 color = Color.White.copy(alpha = 0.9f)
             ) {
                 Icon(
-                    imageVector = Icons.Default.Favorite,
+                    // GANTI DI SINI: Pakai Bookmark agar konsisten dengan SavedScreen
+                    imageVector = if (recipe.isFavorite) Icons.Default.Bookmark else Icons.Default.BookmarkBorder,
                     contentDescription = null,
                     tint = Terracotta,
                     modifier = Modifier.padding(6.dp)
                 )
             }
         }
+
         Spacer(modifier = Modifier.height(8.dp))
+
         Text(
-            // PERHATIKAN: Gunakan recipe.name (sesuai domain model Recipe Anda)
             text = recipe.name,
             fontSize = 15.sp,
             fontWeight = FontWeight.Medium,

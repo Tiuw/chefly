@@ -1,10 +1,7 @@
 package com.skripsi.chefly.ui.viewmodel
 
 import android.app.Application
-import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.skripsi.chefly.data.local.RecipeDao
-import com.skripsi.chefly.data.local.entity.RecipeEntity
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.flow.*
@@ -14,13 +11,15 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.lifecycle.AndroidViewModel
+import com.skripsi.chefly.data.Recipe
 import com.skripsi.chefly.data.repository.RecipeRepository
 import kotlinx.coroutines.Dispatchers
-import kotlin.collections.map
+
+// UI State tetap sama
 data class RecipeUIState(
     val isLoading: Boolean = false,
     val isLoadMore: Boolean = false,
-    val recipes: List<com.skripsi.chefly.data.Recipe> = emptyList(),
+    val recipes: List<Recipe> = emptyList(),
     val categories: List<CategoryData> = emptyList(),
     val cookingMethods: List<String> = listOf("Semua", "Goreng", "Tumis", "Rebus", "Kukus", "Panggang"),
     val selectedCategory: String = "",
@@ -40,16 +39,17 @@ data class CategoryData(
 @OptIn(FlowPreview::class)
 @HiltViewModel
 class RecipeViewModel @Inject constructor(
-    private val repository: RecipeRepository, // Gunakan repository sebagai sumber data utama
+    private val repository: RecipeRepository,
     application: Application
 ) : AndroidViewModel(application) {
 
     private val context = application.applicationContext
+    private val favoriteManager = com.skripsi.chefly.util.FavoriteManager(context)
     private val _uiState = MutableStateFlow(RecipeUIState())
     val uiState = _uiState.asStateFlow()
 
     private val defaultCategories = listOf(
-        CategoryData("Semua", Icons.Default.AllInclusive, true), // Jadikan default pertama
+        CategoryData("Semua", Icons.Default.AllInclusive, true),
         CategoryData("Ayam", Icons.Default.Restaurant, false),
         CategoryData("Sapi", Icons.Default.DinnerDining, false),
         CategoryData("Telur", Icons.Default.EggAlt, false),
@@ -58,119 +58,122 @@ class RecipeViewModel @Inject constructor(
         CategoryData("Ikan", Icons.Default.SetMeal, false)
     )
 
-    // Status pencarian internal untuk debounce
     private val _searchQuery = MutableStateFlow("")
 
     init {
         _uiState.update { it.copy(categories = defaultCategories, selectedCategory = "Semua") }
         fetchFilteredRecipes()
 
-        // OBSERVE SEARCH QUERY DENGAN DEBOUNCE
         viewModelScope.launch {
             _searchQuery
-                .debounce(500) // Tunggu 500ms setelah user berhenti mengetik
-                .distinctUntilChanged() // Jangan cari jika query sama dengan sebelumnya
-                .collect { query ->
-                    performSearch(query)
+                .debounce(500)
+                .distinctUntilChanged()
+                .collect { performSearch(it) }
+        }
+
+        observeFavorites()
+    }
+
+    private fun observeFavorites() {
+        viewModelScope.launch {
+            favoriteManager.favoriteIds.collect { savedIds ->
+                _uiState.update { state ->
+                    state.copy(
+                        recipes = state.recipes.map { recipe ->
+                            recipe.copy(isFavorite = savedIds.contains(recipe.id))
+                        }
+                    )
                 }
+            }
         }
     }
 
-    // --- FUNGSI SEARCH ---
+    // --- FUNGSI TOGGLE FAVORITE (MENGGUNAKAN DATASTORE) ---
+    fun toggleFavorite(recipe: Recipe) {
+        viewModelScope.launch {
+            // Kita panggil toggle di FavoriteManager, bukan di Repository/Database lagi
+            favoriteManager.toggleFavorite(recipe.id)
+        }
+    }
+
     fun onSearchQueryChanged(query: String) {
-        // Update teks di UI secara instan agar tidak lag saat mengetik
         _uiState.update { it.copy(searchQuery = query) }
-        // Kirim ke aliran debounce
         _searchQuery.value = query
     }
 
     private fun performSearch(query: String) {
-        // Kita tidak perlu lagi melakukan kueri di sini, cukup panggil fetchFilteredRecipes
         fetchFilteredRecipes()
     }
 
-    // --- FUNGSI FILTER METODE ---
     fun onMethodSelected(method: String) {
         if (_uiState.value.selectedMethod == method) return
         _uiState.update { it.copy(selectedMethod = method) }
-        fetchFilteredRecipes() // Panggil fungsi tunggal
+        fetchFilteredRecipes()
     }
 
-    // --- FUNGSI FILTER KATEGORI ---
     fun onCategorySelected(categoryName: String) {
         val updatedCategories = _uiState.value.categories.map {
             it.copy(isActive = it.name == categoryName)
         }
 
-        // 1. Update State UI dan Kosongkan Query
         _uiState.update {
             it.copy(
                 categories = updatedCategories,
                 selectedCategory = categoryName,
-                searchQuery = "", // Reset teks di layar
+                searchQuery = "",
                 recipes = emptyList(),
                 currentOffset = 0,
                 isEndReached = false,
                 isLoading = true
             )
         }
-
-        // 2. Reset internal search query agar debounce tidak terpicu dengan data lama
         _searchQuery.value = ""
-
-        // 3. Ambil data berdasarkan kategori murni
         fetchFilteredRecipes()
     }
 
-    // --- FUNGSI FETCH UTAMA (Halaman Pertama) ---
     private fun fetchFilteredRecipes() {
         val state = _uiState.value
-        _uiState.update { it.copy(isLoading = true, recipes = emptyList(), isEndReached = false) }
+        _uiState.update { it.copy(isLoading = true, recipes = emptyList()) }
 
         viewModelScope.launch(Dispatchers.IO) {
             try {
-                val results = if (state.searchQuery.isNotBlank()) {
-                    // Sekarang Unresolved Reference akan hilang
-                    repository.searchRecipesWithFilters(
-                        context = context,
-                        query = state.searchQuery,
-                        category = state.selectedCategory,
-                        method = state.selectedMethod
-                    )
+                // 1. Ambil data mentah dari DB
+                val rawResults = if (state.searchQuery.isNotBlank()) {
+                    repository.searchRecipesWithFilters(context, state.searchQuery, state.selectedCategory, state.selectedMethod)
                 } else {
-                    repository.getRecipesPaged(
-                        context = context,
-                        category = state.selectedCategory,
-                        method = state.selectedMethod,
-                        pageNumber = 0
-                    )
+                    repository.getRecipesPaged(context, state.selectedCategory, state.selectedMethod, 0)
+                }
+
+                // 2. Ambil ID favorit yang ada saat ini dari DataStore secara manual (untuk inisialisasi)
+                val currentFavoriteIds = favoriteManager.favoriteIds.first()
+
+                // 3. Gabungkan: Tandai mana yang favorit
+                val finalResults = rawResults.map { recipe ->
+                    recipe.copy(isFavorite = currentFavoriteIds.contains(recipe.id))
                 }
 
                 _uiState.update {
                     it.copy(
-                        recipes = results,
+                        recipes = finalResults,
                         isLoading = false,
-                        // Jika mode search, matikan paging (isEndReached = true)
-                        isEndReached = state.searchQuery.isNotBlank() || results.isEmpty()
+                        isEndReached = state.searchQuery.isNotBlank() || finalResults.isEmpty()
                     )
                 }
             } catch (e: Exception) {
-                _uiState.update { it.copy(isLoading = false, errorMessage = e.message) }
+                _uiState.update { it.copy(isLoading = false) }
             }
         }
     }
 
-    // --- FUNGSI INFINITE SCROLL (Halaman Berikutnya) ---
     fun loadNextPage() {
         val state = _uiState.value
-        // Jangan load jika sedang mencari kata kunci, sedang loading, atau sudah habis
         if (state.isLoadMore || state.isEndReached || state.searchQuery.isNotEmpty()) return
 
         _uiState.update { it.copy(isLoadMore = true) }
 
         viewModelScope.launch(Dispatchers.IO) {
             try {
-                val nextPage = state.recipes.size / 30 // Mengikuti PAGE_SIZE repository (30)
+                val nextPage = state.recipes.size / 30
                 val newRecipes = repository.getRecipesPaged(
                     context = context,
                     category = state.selectedCategory,

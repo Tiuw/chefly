@@ -12,243 +12,217 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil.compose.AsyncImage
+import com.skripsi.chefly.data.Recipe
 import com.skripsi.chefly.ui.theme.MutedSlate
 import com.skripsi.chefly.ui.theme.WarmIvory
-
-val OnSurface = Color(0xFF241916)
+import com.skripsi.chefly.ui.theme.Terracotta // Pastikan warna diimport benar
+import com.skripsi.chefly.ui.viewmodel.SavedScreenViewModel
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun SavedScreen() {
+fun SavedScreen(
+    onRecipeClick: (String) -> Unit,
+    onAddClick: () -> Unit,
+    viewModel: SavedScreenViewModel = hiltViewModel()
+) {
+    // Observasi data dari database secara reactive
+    val savedRecipes by viewModel.savedRecipes.collectAsStateWithLifecycle()
+    var searchQuery by remember { mutableStateOf("") }
+
+    // Filter lokal untuk fitur search di dalam SavedScreen
+    val filteredRecipes = remember(searchQuery, savedRecipes) {
+        if (searchQuery.isBlank()) savedRecipes
+        else savedRecipes.filter { it.name.contains(searchQuery, ignoreCase = true) }
+    }
+
     Scaffold(
-        topBar = { SavedTopBar() },
-        bottomBar = { SavedBottomNavigation() },
+        containerColor = WarmIvory,
+        topBar = {
+            TopAppBar(
+                title = {
+                    Text("Resep Tersimpan", color = Color(0xFFE36C47), fontWeight = FontWeight.Bold)
+                },
+                colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.White),
+                modifier = Modifier.shadow(1.dp)
+            )
+        },
         floatingActionButton = {
             FloatingActionButton(
-                onClick = { /* Aksi Tambah */ },
-                containerColor = Terracotta,
+                onClick = onAddClick,
+                containerColor = Color(0xFFE36C47),
                 contentColor = Color.White,
                 shape = CircleShape,
+                // Sesuaikan padding agar tidak menutupi area klik Bottom Nav
                 modifier = Modifier.padding(bottom = 16.dp)
             ) {
-                Icon(Icons.Default.Add, contentDescription = "Tambah", modifier = Modifier.size(32.dp))
-            }
-        },
-        containerColor = WarmIvory
-    ) { innerPadding ->
-        Column(
-            modifier = Modifier
-                .padding(innerPadding)
-                .fillMaxSize()
-                .padding(horizontal = 16.dp)
-        ) {
-            // Search & Filter
-            SearchAndSortSection()
-
-            Spacer(modifier = Modifier.height(24.dp))
-
-            // Daftar Resep menggunakan LazyColumn agar efisien
-            val savedRecipes = listOf(
-                RecipeItem("Mangkuk Quinoa Mediterania", "https://lh3.googleusercontent.com/aida-public/AB6AXuB3FfB0AwJX5UloOhYZYkKPB4y4Kx00KgesajHKb1vuSyQd_cgVLun4qty787Nopc5NTET8ApPFx__EOHHz6nP32dlecYqwqaTa_71-3C8zeX1RIPQEmjPW2PaBGQY7uytOH9gavNS-vLN_ayUPTzwoHmZ1_z0B2oLydYHPrLrKVZmVed0KsWar3-jTl4e4YR0zNP7UzkGGb0yu7Xv3EFqmZaZY5YYM2L7soD08bPPsL4A8bIYhcRIdfTP9KS6-vK8lfD-Qmp2jCjM"),
-                RecipeItem("Pasta Arrabbiata Pedas", "https://lh3.googleusercontent.com/aida-public/AB6AXuCr3w6P18NwsRU3KRIkjjI1Q_4uo9gxMcnAf9haONfQRowzR-tp_xMSjDjFHJhS-4FkGqTKJCRLhZGDomihBaZFxcezJWpa5yQWrQB2TPyxcjgzodWbl67l-rO5syY7hKVabQmNzJuiZC-9sGrmdMCf7q-911rucUix4XPhSfA0-q5MNhZYHy3-QQEZ8sHEP9E0qAvluSiB7qzElCIvnkGRSEf6xq-tqN7qm5RrDSrXO1hB0g0-baFAnYB4TS-eWkGE2UPisAyPFE4"),
-                RecipeItem("Hasil Panen Panggang Madu", "https://lh3.googleusercontent.com/aida-public/AB6AXuB-mliEuKtgc9i3DQIhGhcegaTfQCj2ZEFeGpn10sY61nNBuBdLD3zDX7fNNNrxIw5f8FprW3d9sQVMUNYDkPEkLIz6Afk93yK_-J2uD34oRf9ag5dz2XM-MDWoiRk4eJcQQxUFRzaqwrmLoq0mapujMGk0G4k9w73BlNRqBsfsG9jp096JGhkkb9YqN-eWDao462oCyrWbEx4NKp3yywe0Ytt_IjJo0p_Qew9__Jsc50Chg8KALl6WgY0J1tAFtpfzsByEDd7mz_I")
-            )
-
-            LazyColumn(
-                verticalArrangement = Arrangement.spacedBy(16.dp),
-                contentPadding = PaddingValues(bottom = 100.dp)
-            ) {
-                items(savedRecipes) { recipe ->
-                    SavedRecipeCard(recipe)
-                }
+                Icon(
+                    imageVector = Icons.Default.Add,
+                    contentDescription = "Tambah Resep",
+                    modifier = Modifier.size(32.dp)
+                )
             }
         }
-    }
-}
-
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-fun SavedTopBar() {
-    TopAppBar(
-        title = {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                IconButton(onClick = { /* Menu */ }) {
-                    Icon(Icons.Default.Menu, contentDescription = null, tint = Terracotta)
-                }
-                Text(
-                    "Resep Tersimpan",
-                    style = MaterialTheme.typography.titleLarge.copy(
-                        fontWeight = FontWeight.Bold,
-                        fontSize = 24.sp,
-                        color = Terracotta
+    ) { padding ->
+        LazyColumn(
+            modifier = Modifier.fillMaxSize().padding(padding),
+            contentPadding = PaddingValues(16.dp)
+        ) {
+            // 1. Search Bar Section
+            item {
+                Column(modifier = Modifier.padding(bottom = 24.dp)) {
+                    OutlinedTextField(
+                        value = searchQuery,
+                        onValueChange = { searchQuery = it },
+                        placeholder = { Text("Cari resep tersimpan...", color = MutedSlate) },
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(12.dp),
+                        leadingIcon = { Icon(Icons.Default.Search, null, tint = MutedSlate) },
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedContainerColor = Color.White,
+                            unfocusedContainerColor = Color.White
+                        )
                     )
-                )
-            }
-        },
-        actions = {
-            Surface(
-                modifier = Modifier.size(32.dp).padding(end = 8.dp),
-                shape = CircleShape,
-                border = BorderStroke(1.dp, WhisperBorder)
-            ) {
-                AsyncImage(
-                    model = "https://lh3.googleusercontent.com/aida-public/AB6AXuA80uz_bZJ0OqU2XYwqBjDWZi6iIvrF82Dn6ReiQjiEwvehS25Xq62wi6VWTgteKM0qK8kIf67He-ktDAVcuYjjWG9NEv7gEIPOQ-p4RR-lhYOZhHQHGR4AaJFYaCfEqQLY1gwU6uyfT2O95TiZZfNRSLlXvmWMNFu887wKKYhjrRphyHkY1sdSpWPvx-0MIq6fIvSlqzNjbly0ZgPSTGe8YVQ9FNaC7TaxL4MdBAVQP5L-rcKN7N4AOXrJNi_Fs9bkjggYYuiJMBc",
-                    contentDescription = "Profile",
-                    contentScale = ContentScale.Crop
-                )
-            }
-        },
-        colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.White)
-    )
-}
 
-@Composable
-fun SearchAndSortSection() {
-    var searchQuery by remember { mutableStateOf("") }
-    var selectedSort by remember { mutableStateOf("Terbaru") }
+                    Spacer(Modifier.height(16.dp))
 
-    Column(modifier = Modifier.padding(top = 24.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
-        // Search Bar
-        OutlinedTextField(
-            value = searchQuery,
-            onValueChange = { searchQuery = it },
-            modifier = Modifier.fillMaxWidth(),
-            placeholder = { Text("Cari di dapur Anda...", color = MutedSlate) },
-            leadingIcon = { Icon(Icons.Default.Search, contentDescription = null, tint = MutedSlate) },
-            shape = RoundedCornerShape(12.dp),
-            colors = TextFieldDefaults.colors(
-                unfocusedContainerColor = Color.White,
-                focusedContainerColor = Color.White,
-                unfocusedIndicatorColor = WhisperBorder,
-                focusedIndicatorColor = Terracotta,
-                cursorColor = Terracotta
-            ),
-            singleLine = true
-        )
-
-        // Toggles
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Row(
-                modifier = Modifier
-                    .background(SurfaceContainerLow, CircleShape)
-                    .border(1.dp, WhisperBorder, CircleShape)
-                    .padding(4.dp),
-                horizontalArrangement = Arrangement.spacedBy(4.dp)
-            ) {
-                SortChip("Terbaru", selectedSort == "Terbaru") { selectedSort = "Terbaru" }
-                SortChip("Alfabetis", selectedSort == "Alfabetis") { selectedSort = "Alfabetis" }
+                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+                        Text("${filteredRecipes.size} Resep", fontSize = 14.sp, color = MutedSlate)
+                    }
+                }
             }
-            Text("24 Resep", fontSize = 14.sp, color = MutedSlate)
+
+            // 2. Recipe List (DIPERBAIKI: Hanya satu blok items dan kirim parameter onDeleteClick)
+            if (filteredRecipes.isEmpty()) {
+                item { EmptySavedState() }
+            } else {
+                items(filteredRecipes, key = { it.id }) { recipe ->
+                    SavedRecipeCard(
+                        recipe = recipe,
+                        onClick = { onRecipeClick(recipe.id) },
+                        onDeleteClick = { viewModel.removeFromFavorite(recipe.id) } // Sekarang parameter sudah dikirim
+                    )
+                    Spacer(Modifier.height(16.dp))
+                }
+            }
+
+            item { Spacer(Modifier.height(100.dp)) }
         }
     }
 }
 
+// Update fungsi SavedRecipeCard
 @Composable
-fun SortChip(label: String, isActive: Boolean, onClick: () -> Unit) {
-    Surface(
-        color = if (isActive) Terracotta else Color.Transparent,
-        shape = CircleShape,
-        modifier = Modifier.clickable { onClick() }
-    ) {
-        Text(
-            text = label,
-            modifier = Modifier.padding(horizontal = 16.dp, vertical = 6.dp),
-            color = if (isActive) Color.White else Color.Gray,
-            fontSize = 11.sp,
-            fontWeight = FontWeight.Bold
-        )
-    }
-}
-
-@Composable
-fun SavedRecipeCard(recipe: RecipeItem) {
+fun SavedRecipeCard(
+    recipe: Recipe,
+    onClick: () -> Unit,
+    onDeleteClick: () -> Unit // Tambahkan parameter ini
+) {
     Card(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable { onClick() }
+            .shadow(elevation = 4.dp, shape = RoundedCornerShape(20.dp)),
         shape = RoundedCornerShape(20.dp),
-        colors = CardDefaults.cardColors(containerColor = Color.White),
-        border = BorderStroke(1.dp, WhisperBorder),
-        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+        colors = CardDefaults.cardColors(containerColor = Color.White)
     ) {
         Column {
             Box(modifier = Modifier.height(192.dp).fillMaxWidth()) {
                 AsyncImage(
                     model = recipe.imageUrl,
-                    contentDescription = recipe.title,
+                    contentDescription = recipe.name,
                     modifier = Modifier.fillMaxSize(),
                     contentScale = ContentScale.Crop
                 )
-                // Bookmark Badge
+
+                // Tombol Hapus dari Favorit (Bookmark)
                 Surface(
-                    modifier = Modifier.align(Alignment.TopEnd).padding(12.dp).size(36.dp),
+                    modifier = Modifier
+                        .padding(12.dp)
+                        .align(Alignment.TopEnd)
+                        .size(36.dp)
+                        .clickable(
+                            onClick = onDeleteClick, // Trigger hapus
+                            indication = null,
+                            interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }
+                        ),
                     shape = CircleShape,
                     color = Color.White.copy(alpha = 0.9f)
                 ) {
                     Icon(
-                        Icons.Default.Bookmark,
-                        contentDescription = null,
-                        tint = Terracotta,
+                        imageVector = Icons.Default.Bookmark, // Tetap bookmark isi karena ini halaman saved
+                        contentDescription = "Hapus",
+                        tint = Color(0xFFE36C47),
                         modifier = Modifier.padding(8.dp)
                     )
                 }
             }
-            Text(
-                text = recipe.title,
-                modifier = Modifier.padding(16.dp),
-                fontWeight = FontWeight.Bold,
-                fontSize = 18.sp,
-                color = OnSurface,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis
-            )
+
+            Column(modifier = Modifier.padding(16.dp)) {
+                Text(
+                    text = recipe.name,
+                    fontSize = 18.sp,
+                    fontWeight = FontWeight.Bold,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+                Text(
+                    text = recipe.category,
+                    fontSize = 14.sp,
+                    color = MutedSlate
+                )
+            }
         }
     }
 }
 
 @Composable
-fun SavedBottomNavigation() {
-    NavigationBar(containerColor = Color.White, tonalElevation = 8.dp) {
-        val items = listOf(
-            Triple("Beranda", Icons.Default.Home, false),
-            Triple("Pindai", Icons.Default.CenterFocusStrong, false),
-            Triple("Resep", Icons.Default.RestaurantMenu, false),
-            Triple("Tersimpan", Icons.Default.Bookmark, true)
+fun EmptySavedState() {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(top = 80.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center
+    ) {
+        Box(
+            modifier = Modifier
+                .size(128.dp)
+                .border(2.dp, Color(0xFFE0E0E0), CircleShape), // Gunakan WhisperBorder jika sudah ada di theme
+            contentAlignment = Alignment.Center
+        ) {
+            Icon(
+                imageVector = Icons.Default.SoupKitchen,
+                contentDescription = null,
+                modifier = Modifier.size(64.dp),
+                tint = MutedSlate
+            )
+        }
+
+        Spacer(Modifier.height(24.dp))
+
+        Text(
+            "Dapur Anda masih sepi",
+            fontSize = 20.sp,
+            fontWeight = FontWeight.Bold,
+            color = Color(0xFF333333) // Gunakan DeepCharcoal jika ada di theme
         )
 
-        items.forEach { (label, icon, isSelected) ->
-            NavigationBarItem(
-                selected = isSelected,
-                onClick = { /* Navigasi */ },
-                icon = { Icon(icon, contentDescription = label) },
-                label = { Text(label, fontSize = 10.sp) },
-                colors = NavigationBarItemDefaults.colors(
-                    selectedIconColor = Terracotta,
-                    selectedTextColor = Terracotta,
-                    indicatorColor = SurfaceContainerLow,
-                    unselectedIconColor = MutedSlate,
-                    unselectedTextColor = MutedSlate
-                )
-            )
-        }
+        Text(
+            "Simpan resep untuk melihatnya di sini atau scan kulkas Anda untuk ide baru.",
+            textAlign = TextAlign.Center,
+            color = MutedSlate,
+            modifier = Modifier.padding(horizontal = 32.dp, vertical = 8.dp)
+        )
     }
-}
-
-data class RecipeItem(val title: String, val imageUrl: String)
-
-@Preview(showBackground = true, device = "spec:width=430dp,height=932dp")
-@Composable
-fun SavedRecipesPreview() {
-    SavedScreen()
 }

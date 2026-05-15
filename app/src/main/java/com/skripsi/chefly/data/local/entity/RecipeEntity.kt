@@ -7,18 +7,18 @@ import com.skripsi.chefly.data.Recipe
 
 @Entity(tableName = "recipes")
 data class RecipeEntity(
-    @ColumnInfo(name = "category")
-    val category: String?,
-
     @PrimaryKey
     @ColumnInfo(name = "id")
     val id: String,
+
+    @ColumnInfo(name = "category")
+    val category: String?,
 
     @ColumnInfo(name = "image_url")
     val imageUrl: String?,
 
     @ColumnInfo(name = "loves")
-    val loves: Int?,
+    val loves: Int?, // Tetap untuk Popularitas/Sorting
 
     @ColumnInfo(name = "primary_cooking_method")
     val primaryCookingMethod: String?,
@@ -36,7 +36,7 @@ data class RecipeEntity(
     val uiIngredients: String?,
 
     @ColumnInfo(name = "ui_steps")
-    val uiSteps: String?
+    val uiSteps: String?,
 ) {
     fun toDomain(): Recipe = Recipe(
         id = id,
@@ -47,7 +47,7 @@ data class RecipeEntity(
         steps = uiSteps ?: "",
         totalIngredients = totalIngredients,
         totalSteps = totalSteps,
-        loves = loves,
-        cookingMethod = primaryCookingMethod
+        loves = loves, // Popularitas
+        cookingMethod = primaryCookingMethod,
     )
 }

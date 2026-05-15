@@ -16,7 +16,7 @@ import com.skripsi.chefly.data.local.entity.IdfDictionaryEntity
         TfidfDataEntity::class,
         IdfDictionaryEntity::class
     ],
-    version = 4,
+    version = 5,
     exportSchema = false
 )
 abstract class AppDatabase : RoomDatabase() {

@@ -117,7 +117,6 @@ interface RecipeDao {
     @Query("SELECT * FROM idf_dictionary WHERE ingredient IN (:ingredients)")
     suspend fun getIdfWeightsForIngredients(ingredients: List<String>): List<IdfDictionaryEntity>
 
-
     @Query("SELECT * FROM recipes WHERE id = :id LIMIT 1")
     suspend fun getById(id: String): RecipeEntity?
 

@@ -12,8 +12,9 @@ data class Recipe(
     val steps: String,
     val totalIngredients: Int? = null,
     val totalSteps: Int? = null,
-    val loves: Int? = null,
-    val cookingMethod: String? = null
+    val loves: Int? = null, // Digunakan untuk Popularitas/Sorting
+    val cookingMethod: String? = null,
+    val isFavorite: Boolean = false
 ) {
     val ingredientList: List<String>
         get() = ingredients
