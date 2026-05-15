@@ -21,15 +21,19 @@ class FavoriteManager(private val context: Context) {
         }
 
     // Fungsi Tambah/Hapus (Toggle)
+    // Di dalam FavoriteManager.kt bagian toggleFavorite
     suspend fun toggleFavorite(recipeId: String) {
         context.dataStore.edit { preferences ->
             val currentFavorites = preferences[FAVORITES_KEY] ?: emptySet()
+
             if (currentFavorites.contains(recipeId)) {
-                // Jika sudah ada, hapus
                 preferences[FAVORITES_KEY] = currentFavorites - recipeId
             } else {
-                // Jika belum ada, tambah
-                preferences[FAVORITES_KEY] = currentFavorites + recipeId
+                // Gunakan LinkedHashSet agar urutan masuk (insertion order) terjaga
+                // Kita taruh yang baru di posisi paling awal
+                val newList = mutableListOf(recipeId)
+                newList.addAll(currentFavorites)
+                preferences[FAVORITES_KEY] = newList.toSet()
             }
         }
     }

@@ -24,8 +24,7 @@ class SavedScreenViewModel @Inject constructor(
     // 2. Hubungkan ID dari DataStore dengan data asli di Repository
     val savedRecipes: StateFlow<List<Recipe>> = favoriteManager.favoriteIds
         .map { ids ->
-            // Untuk setiap ID yang ada di catatan (DataStore),
-            // ambil data lengkap resepnya dari database utama
+            // ids di sini sekarang sudah urut (terbaru di depan) karena logika di FavoriteManager
             ids.mapNotNull { id ->
                 repository.getRecipeById(context, id)?.copy(isFavorite = true)
             }

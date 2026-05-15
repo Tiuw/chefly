@@ -91,7 +91,6 @@ class RecipeViewModel @Inject constructor(
     // --- FUNGSI TOGGLE FAVORITE (MENGGUNAKAN DATASTORE) ---
     fun toggleFavorite(recipe: Recipe) {
         viewModelScope.launch {
-            // Kita panggil toggle di FavoriteManager, bukan di Repository/Database lagi
             favoriteManager.toggleFavorite(recipe.id)
         }
     }
