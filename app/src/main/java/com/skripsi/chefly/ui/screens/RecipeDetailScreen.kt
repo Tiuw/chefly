@@ -2,6 +2,7 @@ package com.skripsi.chefly.ui.screens
 
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
@@ -24,6 +25,8 @@ import androidx.compose.ui.unit.sp
 import androidx.navigation.NavHostController
 import coil.compose.AsyncImage
 import com.skripsi.chefly.ui.viewmodel.RecipeDetailViewModel
+import androidx.compose.material.icons.filled.Bookmark
+import androidx.compose.material.icons.filled.BookmarkBorder
 
 // Palette Warna
 val Terracotta = Color(0xFFE36C47)
@@ -97,6 +100,29 @@ fun RecipeDetailScreen(
                                 fontWeight = FontWeight.Bold,
                                 modifier = Modifier.align(Alignment.BottomStart).padding(16.dp)
                             )
+
+                            // FITUR BARU: Tombol Simpan di Pojok Kanan Atas Gambar
+                            Surface(
+                                modifier = Modifier
+                                    .align(Alignment.TopEnd)
+                                    .padding(16.dp)
+                                    .size(40.dp)
+                                    .clickable(
+                                        onClick = { viewModel.toggleFavorite() },
+                                        indication = null,
+                                        interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }
+                                    ),
+                                shape = CircleShape,
+                                color = Color.White.copy(alpha = 0.9f),
+                                shadowElevation = 2.dp
+                            ) {
+                                Icon(
+                                    imageVector = if (currentRecipe.isFavorite) Icons.Default.Bookmark else Icons.Default.BookmarkBorder,
+                                    contentDescription = "Simpan Resep",
+                                    tint = Terracotta,
+                                    modifier = Modifier.padding(10.dp)
+                                )
+                            }
                         }
 
                         // --- Content ---
