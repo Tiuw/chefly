@@ -42,6 +42,11 @@ android {
         compose = true
         mlModelBinding = true
     }
+
+    androidResources {
+        // Cara modern di Gradle Kotlin DSL untuk mencegah kompresi file model
+        noCompress += "tflite"
+    }
 }
 
 dependencies {

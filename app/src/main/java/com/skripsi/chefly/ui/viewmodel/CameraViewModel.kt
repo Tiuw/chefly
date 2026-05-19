@@ -6,7 +6,7 @@ import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.skripsi.chefly.data.model.DetectedIngredient
-import com.skripsi.chefly.ml.YOLOv8sDetector
+import com.skripsi.chefly.ml.YOLO26Detector // Mengacu pada detector utama yang sudah aman dan stabil
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -16,8 +16,8 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
 /**
- * ViewModel for CameraScreen
- * Handles real-time ingredient detection, image upload, and detection results
+ * ViewModel untuk CameraScreen
+ * Menangani inferensi real-time Edge AI YOLO26 NMS-Free dan distribusi state deteksi ke UI
  */
 class CameraViewModel : ViewModel() {
 
@@ -36,37 +36,73 @@ class CameraViewModel : ViewModel() {
     private val _debugMessage = MutableStateFlow<String?>(null)
     val debugMessage: StateFlow<String?> = _debugMessage.asStateFlow()
 
-    private var detector: YOLOv8sDetector? = null
     private val TAG = "CameraViewModel"
+    private var detector: YOLO26Detector? = null
 
     fun initializeDetector(context: Context) {
-        try {
-            if (detector == null) {
-                // Load labels from assets or use defaults
-                val defaultLabels = listOf(
-                    "Ayam", "Bawang Merah", "Bawang Putih", "Bayam", "Cabai Hijau", "Cabai Merah",
-                    "Daging Kambing", "Daging Sapi", "Daun Bawang", "Ikan", "Kacang Panjang", "Kangkung",
-                    "Kol", "Nasi", "Tahu", "Telur", "Tempe", "Terong", "Tomat", "Udang", "Wortel"
-                )
+        if (detector != null) return
 
-                val labels = try {
-                    val stream = context.assets.open("labels.txt")
-                    val text = stream.bufferedReader().use { it.readText() }
-                    val parsed = text.split('\n').map { it.trim() }.filter { it.isNotEmpty() }
-                    if (parsed.isEmpty()) defaultLabels else parsed
-                } catch (_: Exception) {
-                    defaultLabels
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                // Parsing labels.txt murni dari asset tanpa hardcoded cadangan defaultLabels
+                val labels = context.assets.open("labels.txt").bufferedReader().use { it.readText() }
+                    .split('\n')
+                    .map { it.trim() }
+                    .filter { it.isNotEmpty() }
+
+                if (labels.isEmpty()) {
+                    throw IllegalStateException("Berkas labels.txt kosong atau tidak valid!")
                 }
 
-                detector = YOLOv8sDetector(context, "yolov8s.tflite", labels, useNNAPI = false)
+                withContext(Dispatchers.Main) {
+                    detector = YOLO26Detector(context, "yolo26s_float32.tflite", labels, false)
+                    Log.i(TAG, "✅ YOLO26Detector sukses diinisialisasi dengan ${labels.size} kelas.")
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "❌ Gagal memuat komponen label atau model .tflite: ${e.message}", e)
             }
-        } catch (e: Exception) {
-            Log.e(TAG, "Error initializing detector: ${e.message}", e)
         }
     }
 
-    fun updateCameraDetections(detections: List<DetectedIngredient>) {
-        _detections.value = detections
+    fun processCameraFrame(bitmap: Bitmap) {
+        viewModelScope.launch(Dispatchers.Default) {
+            try {
+                Log.d("Chefly_Debug", "📸 Frame diterima oleh ViewModel. Ukuran: ${bitmap.width}x${bitmap.height}")
+
+                // Nilai threshold diatur standar 0.40f (40%) untuk menjaga akurasi sidang
+                val results = detector?.detectObjects(bitmap, 0.60f) ?: emptyList()
+
+                Log.d("Chefly_Debug", "⚙️ Hasil deteksi model YOLO26: ${results.size} objek ditemukan.")
+
+                val mappedDetections = results.map { d ->
+                    DetectedIngredient(
+                        label = d.className,
+                        confidence = d.confidence,
+                        boundingBox = android.graphics.RectF(
+                            d.box.left, d.box.top, d.box.right, d.box.bottom
+                        )
+                    )
+                }
+
+                withContext(Dispatchers.Main) {
+                    _detections.value = mappedDetections
+                }
+            } catch (e: Exception) {
+                Log.e("Chefly_Debug", "❌ Error di pipeline pemrosesan frame: ${e.message}", e)
+            }
+        }
+    }
+
+    // --- PERBAIKAN BUG: Fungsi Pembersih State ---
+    fun clearCameraDetections() {
+        _detections.value = emptyList()
+        Log.d(TAG, "🧹 State deteksi kamera real-time dibersihkan.")
+    }
+
+    fun clearUploadedImageDetections() {
+        _uploadedImage.value = null
+        _imageDetections.value = emptyList()
+        Log.d(TAG, "🧹 State deteksi gambar galeri dibersihkan.")
     }
 
     fun setUploadedImage(bitmap: Bitmap) {
@@ -77,8 +113,8 @@ class CameraViewModel : ViewModel() {
         _isProcessingImage.value = true
         viewModelScope.launch(Dispatchers.Default) {
             try {
-                val detections = detector?.detectObjects(bitmap, 0.35f) ?: emptyList()
-                val mapped = detections.map { d ->
+                val results = detector?.detectObjects(bitmap, 0.60f) ?: emptyList()
+                val mapped = results.map { d ->
                     DetectedIngredient(
                         label = d.className,
                         confidence = d.confidence,
@@ -92,7 +128,7 @@ class CameraViewModel : ViewModel() {
                     _imageDetections.value = mapped
                 }
             } catch (e: Exception) {
-                Log.e(TAG, "Error processing image: ${e.message}", e)
+                Log.e(TAG, "Error memproses gambar unggahan: ${e.message}", e)
             } finally {
                 withContext(Dispatchers.Main) {
                     _isProcessingImage.value = false
@@ -107,10 +143,10 @@ class CameraViewModel : ViewModel() {
         viewModelScope.launch(Dispatchers.Default) {
             try {
                 val t0 = System.currentTimeMillis()
-                val detections = detector?.detectObjects(bitmap, 0.35f) ?: emptyList()
+                val results = detector?.detectObjects(bitmap, 0.35f) ?: emptyList()
                 val t1 = System.currentTimeMillis()
 
-                val mapped = detections.map { d ->
+                val mapped = results.map { d ->
                     DetectedIngredient(
                         label = d.className,
                         confidence = d.confidence,
@@ -146,4 +182,3 @@ class CameraViewModel : ViewModel() {
         detector?.close()
     }
 }
-

@@ -2,16 +2,20 @@ Ayam
 Bawang Merah
 Bawang Putih
 Bayam
+Biji Kemiri
 Cabai Hijau
 Cabai Merah
-Daging Kambing
 Daging Sapi
-Daun Bawang
 Ikan
+Jagung
+Jahe
 Kacang Panjang
 Kangkung
+Kencur
+Kentang
 Kol
-Nasi
+Kunyit
+Lengkuas
 Tahu
 Telur
 Tempe
@@ -19,4 +23,3 @@ Terong
 Tomat
 Udang
 Wortel
-
