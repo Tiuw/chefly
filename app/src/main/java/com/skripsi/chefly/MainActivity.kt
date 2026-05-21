@@ -105,7 +105,7 @@ fun MainScreen() {
                 )
             }
 
-// --- Add Ingredient Screen ---
+            // --- Add Ingredient Screen ---
             composable(Screen.TambahBahan.route) {
                 AddIngredientScreen(
                     onBackClick = { navController.popBackStack() },
@@ -120,9 +120,9 @@ fun MainScreen() {
                 )
             }
 
-            // --- All Recipes Screen (Explore) ---
+            // --- All Recipes Screen (Explore) di dalam MainActivity.kt ---
             composable(
-                route = "${Screen.Resep.route}?query={query}", // Menerima parameter kueri opsional
+                route = "${Screen.Resep.route}?query={query}",
                 arguments = listOf(navArgument("query") {
                     type = NavType.StringType
                     nullable = true
@@ -132,9 +132,12 @@ fun MainScreen() {
                 val argumentQuery = backStackEntry.arguments?.getString("query") ?: ""
 
                 RecipeScreen(
-                    initialQuery = argumentQuery, // 🟢 Oper kueri kiriman dari screen sebelumnya ke Compose
-                    onRecipeClick = { id ->
-                        navController.navigate(Screen.RecipeDetail.createRoute(id))
+                    initialQuery = argumentQuery,
+                    // 🟢 REVISI: Ubah lambda agar menerima ID DAN nilai similarity sekaligus dari Card
+                    onRecipeClick = { id, score ->
+                        navController.navigate(
+                            "${Screen.RecipeDetail.route.replace("{recipeId}", id)}?query=$argumentQuery&similarity=$score"
+                        )
                     },
                     onScanClick = {
                         navController.navigate(Screen.Pindai.route)
@@ -160,16 +163,24 @@ fun MainScreen() {
 
             // --- Recipe Detail Screen ---
             composable(
-                route = Screen.RecipeDetail.route,
-                arguments = listOf(navArgument("recipeId") { type = NavType.StringType })
+                route = "${Screen.RecipeDetail.route}?query={query}&similarity={similarity}", // 🟢 Tambahkan similarity
+                arguments = listOf(
+                    navArgument("recipeId") { type = NavType.StringType },
+                    navArgument("query") { type = NavType.StringType; nullable = true; defaultValue = "" },
+                    navArgument("similarity") { type = NavType.FloatType; defaultValue = 0f } // 🟢 Tipe Float
+                )
             ) { backStackEntry ->
                 val recipeId = backStackEntry.arguments?.getString("recipeId") ?: ""
+                val query = backStackEntry.arguments?.getString("query") ?: ""
+                val similarity = backStackEntry.arguments?.getFloat("similarity") ?: 0f // 🟢 Tangkap nilainya
+
                 val viewModel: RecipeDetailViewModel = hiltViewModel()
 
                 RecipeDetailScreen(
-                    // 🟢 REVISI: Alihkan navigasi back agar memicu restoreState halaman resep
                     navController = navController,
                     recipeId = recipeId,
+                    currentQuery = query,
+                    passedSimilarity = similarity,
                     viewModel = viewModel
                 )
             }

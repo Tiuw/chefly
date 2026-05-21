@@ -38,7 +38,7 @@ import com.skripsi.chefly.ui.viewmodel.RecipeViewModel
 @Composable
 fun RecipeScreen(
     initialQuery: String = "",
-    onRecipeClick: (String) -> Unit,
+    onRecipeClick: (String, Float) -> Unit, // 🟢 Sudah sinkron menerima ID dan Score
     onScanClick: () -> Unit,
     viewModel: RecipeViewModel = hiltViewModel()
 ) {
@@ -119,7 +119,6 @@ fun RecipeScreen(
                 )
             }
 
-            // 🟢 MENGIRIM QUERY UNTUK DIHITUNG DI DALAM CARD
             items(
                 items = uiState.recipes,
                 key = { it.id }
@@ -127,8 +126,11 @@ fun RecipeScreen(
                 ExtendedRecipeCard(
                     recipe = recipe,
                     isAiMode = uiState.isAiSearchActive,
-                    currentQuery = uiState.searchQuery, // Oper query pencarian saat ini
-                    onClick = { onRecipeClick(recipe.id) },
+                    currentQuery = uiState.searchQuery,
+                    onClick = {
+                        // 🟢 FIX MATCH: Terbungkus blok lambda untuk mencegah Type Mismatch Error
+                        onRecipeClick(recipe.id, recipe.similarity)
+                    },
                     onFavoriteClick = { viewModel.toggleFavorite(recipe) }
                 )
             }
@@ -270,23 +272,20 @@ fun ExtendedRecipeCard(
     onClick: () -> Unit,
     onFavoriteClick: () -> Unit
 ) {
-    // 🟢 1. LOGIKA TERKOREKSI: Memisahkan Nama Bahan secara Spesifik
-    val ingredientAnalysis = remember(recipe, currentQuery) {
+    // 🟢 LOCK CONDITION: Memisahkan nama bahan HANYA jika query terisi DAN flag isAiMode aktif
+    val ingredientAnalysis = remember(recipe, currentQuery, isAiMode) {
         val allRecipeIngredients = recipe.ingredientList
 
-        if (currentQuery.isNotBlank()) {
-            // Pecah token kueri dari search bar
+        if (currentQuery.isNotBlank() && isAiMode) {
             val userTokens = currentQuery.split(Regex("[,\\s]+"))
                 .map { it.trim().lowercase().replace("_", "") }
                 .filter { it.isNotEmpty() }
 
-            // Pisahkan bahan asli ke dalam kelompok "Ada" dan "Tidak Ada"
             val availableList = mutableListOf<String>()
             val missingList = mutableListOf<String>()
 
             for (ingredient in allRecipeIngredients) {
                 val cleanedIngredient = ingredient.lowercase().replace(" ", "")
-                // Cek apakah ada kecocokan kata kunci
                 val isMatched = userTokens.any { token -> cleanedIngredient.contains(token) }
 
                 if (isMatched) {
@@ -298,7 +297,6 @@ fun ExtendedRecipeCard(
 
             Pair(availableList, missingList)
         } else {
-            // Jika tidak dalam mode pencarian, anggap semua bahan belum tersedia
             Pair(emptyList<String>(), allRecipeIngredients)
         }
     }
@@ -313,7 +311,6 @@ fun ExtendedRecipeCard(
         colors = CardDefaults.cardColors(containerColor = Color.White)
     ) {
         Column(modifier = Modifier.clickable { onClick() }) {
-            // --- Bagian Atas: Image & Persentase Cosine (Tetap Sama) ---
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -350,7 +347,6 @@ fun ExtendedRecipeCard(
                 }
             }
 
-            // --- Bagian Tengah: Judul & Tombol Favorit (Tetap Sama) ---
             Column(modifier = Modifier.padding(16.dp)) {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
@@ -375,69 +371,61 @@ fun ExtendedRecipeCard(
                     }
                 }
 
-                // 🟢 2. REVISI UTAMA: Menampilkan Nama Bahan Secara Tekstual Sesuai Mockup Prototype
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(vertical = 12.dp),
-                    verticalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    // baris 1: Informasi Bahan Tersedia (Hanya muncul jika ada bahan yang cocok)
-                    if (availableIngredients.isNotEmpty()) {
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clip(RoundedCornerShape(8.dp))
-                                .background(SoftSage.copy(alpha = 0.1f))
-                                .padding(horizontal = 12.dp, vertical = 8.dp),
-                            verticalAlignment = Alignment.Top,
-                            horizontalArrangement = Arrangement.spacedBy(6.dp)
-                        ) {
-                            Icon(Icons.Default.CheckCircle, null, tint = SoftSage, modifier = Modifier.size(16.dp).padding(top = 2.dp))
+                // 🟢 HIDE CONDITIONAL LAYOUT: Menyembunyikan boks bahan sepenuhnya jika dalam mode search manual teks
+                if (isAiMode) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 12.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        if (availableIngredients.isNotEmpty()) {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clip(RoundedCornerShape(8.dp))
+                                    .background(SoftSage.copy(alpha = 0.1f))
+                                    .padding(horizontal = 12.dp, vertical = 8.dp),
+                                verticalAlignment = Alignment.Top,
+                                horizontalArrangement = Arrangement.spacedBy(6.dp)
+                            ) {
+                                Icon(Icons.Default.CheckCircle, null, tint = SoftSage, modifier = Modifier.size(16.dp).padding(top = 2.dp))
+                                val availableText = availableIngredients.take(3).joinToString(", ")
+                                val extraAvailable = if (availableIngredients.size > 3) " (+${availableIngredients.size - 3} lainnya)" else ""
+                                Text(
+                                    text = "Tersedia: $availableText$extraAvailable",
+                                    fontSize = 12.sp, color = SoftSage, fontWeight = FontWeight.Medium, modifier = Modifier.weight(1f)
+                                )
+                            }
+                        }
 
-                            val availableText = availableIngredients.take(3).joinToString(", ")
-                            val extraAvailable = if (availableIngredients.size > 3) " (+${availableIngredients.size - 3} lainnya)" else ""
-
-                            Text(
-                                text = "Tersedia: $availableText$extraAvailable",
-                                fontSize = 12.sp,
-                                color = SoftSage,
-                                fontWeight = FontWeight.Medium,
-                                modifier = Modifier.weight(1f)
-                            )
+                        if (missingIngredients.isNotEmpty() && currentQuery.isNotBlank()) {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clip(RoundedCornerShape(8.dp))
+                                    .background(ErrorCoral.copy(alpha = 0.1f))
+                                    .padding(horizontal = 12.dp, vertical = 8.dp),
+                                verticalAlignment = Alignment.Top,
+                                horizontalArrangement = Arrangement.spacedBy(6.dp)
+                            ) {
+                                Icon(Icons.Default.AddCircle, null, tint = ErrorCoral, modifier = Modifier.size(16.dp).padding(top = 2.dp))
+                                val missingText = missingIngredients.take(3).joinToString(", ")
+                                val extraMissing = if (missingIngredients.size > 3) " (+${missingIngredients.size - 3} lainnya)" else ""
+                                Text(
+                                    text = "Butuh: $missingText$extraMissing",
+                                    fontSize = 12.sp, color = ErrorCoral, fontWeight = FontWeight.Medium, modifier = Modifier.weight(1f)
+                                )
+                            }
                         }
                     }
-
-                    // baris 2: Informasi Bahan Kurang / Butuh Tambahan
-                    if (missingIngredients.isNotEmpty() && currentQuery.isNotBlank()) {
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clip(RoundedCornerShape(8.dp))
-                                .background(ErrorCoral.copy(alpha = 0.1f))
-                                .padding(horizontal = 12.dp, vertical = 8.dp),
-                            verticalAlignment = Alignment.Top,
-                            horizontalArrangement = Arrangement.spacedBy(6.dp)
-                        ) {
-                            Icon(Icons.Default.AddCircle, null, tint = ErrorCoral, modifier = Modifier.size(16.dp).padding(top = 2.dp))
-
-                            val missingText = missingIngredients.take(3).joinToString(", ")
-                            val extraMissing = if (missingIngredients.size > 3) " (+${missingIngredients.size - 3} lainnya)" else ""
-
-                            Text(
-                                text = "Butuh: $missingText$extraMissing",
-                                fontSize = 12.sp,
-                                color = ErrorCoral,
-                                fontWeight = FontWeight.Medium,
-                                modifier = Modifier.weight(1f)
-                            )
-                        }
-                    }
+                } else {
+                    // Berikan sedikit jarak napas pengganti boks jika dalam mode resep reguler
+                    Spacer(modifier = Modifier.height(8.dp))
                 }
 
                 HorizontalDivider(color = Color(0xFFCBD5E1).copy(alpha = 0.3f), thickness = 1.dp)
 
-                // --- Bagian Bawah: Card Footer (Tetap Sama) ---
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
