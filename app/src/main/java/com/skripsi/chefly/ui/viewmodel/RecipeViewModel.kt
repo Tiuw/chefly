@@ -108,8 +108,19 @@ class RecipeViewModel @Inject constructor(
 
     fun onMethodSelected(method: String) {
         if (_uiState.value.selectedMethod == method) return
+
+        // 1. Update status metode yang dipilih di UI terlebih dahulu
         _uiState.update { it.copy(selectedMethod = method) }
-        fetchFilteredRecipes()
+
+        // 2. Cek pemicu kueri search bar
+        val currentQuery = _uiState.value.searchQuery
+        if (currentQuery.contains(",")) {
+            // 🟢 Jika sedang dalam mode AI (ada koma), hitung ulang Cosine dengan filter barumu
+            executeCosineRecommendation(currentQuery)
+        } else {
+            // Jika sedang dalam mode pencarian teks biasa, jalankan pencarian SQL standar
+            fetchFilteredRecipes()
+        }
     }
 
     fun onCategorySelected(categoryName: String) {
@@ -185,10 +196,15 @@ class RecipeViewModel @Inject constructor(
      * Jalankan Komputasi TF-IDF & Cosine Similarity Skripsi
      */
     private fun executeCosineRecommendation(rawQuery: String) {
+        // 1. Ambil state saat ini di awal untuk mendapatkan filter metode memasak yang sedang dipilih user
+        val currentState = _uiState.value
+        val activeMethod = currentState.selectedMethod
+
         _uiState.update { it.copy(isLoading = true, isAiSearchActive = true) }
+
         viewModelScope.launch(Dispatchers.Default) {
             try {
-                // 1. Pecah teks CSV kembali menjadi representasi elemen List bersih
+                // 2. Pecah teks CSV kembali menjadi representasi elemen List bersih
                 val ingredientsList = rawQuery.split(",")
                     .map { it.trim() }
                     .filter { it.isNotEmpty() }
@@ -198,38 +214,54 @@ class RecipeViewModel @Inject constructor(
                     return@launch
                 }
 
-                // 2. Jalankan perhitungan spasial vector jarak Cosine Similarity
+                // 3. Jalankan perhitungan spasial vector jarak Cosine Similarity
                 val aiRecommendations = recommendationSystem.getRecommendations(ingredientsList)
 
-                // Tambahkan Log untuk memastikan hitungan Cosine-mu menghasilkan ID resep
-                Log.d("Chefly_Debug", "Hasil Cosine mendeteksi total: ${aiRecommendations.size} resep cocok.")
+                Log.d("Chefly_Debug", "Hasil Cosine sebelum filter metode mendeteksi total: ${aiRecommendations.size} resep.")
 
-                // 3. Tarik data ID favorit saat ini
+                // 4. Tarik data ID favorit saat ini
                 val currentFavoriteIds = favoriteManager.favoriteIds.first()
 
-                // 4. 🟢 PERBAIKAN MUTLAK: Konversi ID dengan aman sebelum melempar ke repository
+                // 5. Proses Mapping Dan Post-Filtering berdasarkan Metode Memasak
                 val finalAiResults = aiRecommendations.mapNotNull { aiResult ->
-                    // Ambil resep utuh dari repository (Pastikan string id bersih tanpa spasi)
+                    // Tarik data objek resep utuh dari database Room via Repository
                     val fullRecipe = repository.getRecipeById(context, aiResult.recipeId.toString().trim())
 
                     if (fullRecipe != null) {
-                        fullRecipe.copy(isFavorite = currentFavoriteIds.contains(fullRecipe.id))
+                        // 🟢 LOGIKA POST-FILTERING METODE MEMASAK
+                        // Lolos jika user memilih "Semua", string kosong, atau jika cookingMethod dari database cocok dengan filter UI
+                        val isMethodMatch = activeMethod.isBlank() ||
+                                activeMethod.equals("Semua", ignoreCase = true) ||
+                                fullRecipe.cookingMethod?.equals(activeMethod, ignoreCase = true) == true
+
+                        if (isMethodMatch) {
+                            // Jika lolos filter, copy objek dan suntikkan skor kedekatan vektor serta status favoritnya
+                            fullRecipe.copy(
+                                isFavorite = currentFavoriteIds.contains(fullRecipe.id),
+                                similarity = aiResult.similarityScore
+                            )
+                        } else {
+                            // Jika metode memasak tidak cocok (misal resep kuah padahal filter tombol "Goreng"), eliminasi dari list
+                            null
+                        }
                     } else {
-                        // Jika null, log ID-nya untuk mendeteksi apakah data resep memang tidak ada di DB Room
-                        Log.e("RecipeViewModel", "ID Resep #${aiResult.recipeId} ada di data TF-IDF tapi tidak ditemukan di Room DB!")
+                        Log.e("RecipeViewModel", "ID Resep #${aiResult.recipeId} ada di TF-IDF tapi tidak ditemukan di Room DB!")
                         null
                     }
                 }
 
+                Log.d("Chefly_Debug", "Hasil Cosine setelah dieksekusi Post-Filtering: ${finalAiResults.size} resep lolos.")
+
+                // 6. Update UI State secara utuh menggunakan Dispatchers utama (Main Thread otomatis via update)
                 _uiState.update {
                     it.copy(
                         recipes = finalAiResults,
                         isLoading = false,
-                        isEndReached = true // Hasil komputasi matriks langsung keluar utuh
+                        isEndReached = true // Hasil komputasi spasial matriks langsung keluar utuh satu halaman
                     )
                 }
             } catch (e: Exception) {
-                Log.e("RecipeViewModel", "Gagal menghitung matriks kecocokan AI: ${e.message}", e)
+                Log.e("RecipeViewModel", "Gagal menghitung matriks kecocokan AI dan Post-Filter: ${e.message}", e)
                 _uiState.update { it.copy(isLoading = false) }
             }
         }
