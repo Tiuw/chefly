@@ -71,8 +71,7 @@ class RecipeRecommendationSystem @Inject constructor(
      * @param userIngredients Daftar komponen bahan pangan masukan (Kamera YOLO26 / Centang Manual)
      */
     suspend fun getRecommendations(userIngredients: List<String>): List<RecommendationResult> = withContext(Dispatchers.Default) {
-        // Otomatis jalankan inisialisasi jika data cache memori masih kosong
-        if (idfMap == null || recipeVectorsMap == null || recipeTitlesMap == null) {
+        if (idfMap == null || recipeVectorsMap == null || recipeTitlesMap != null) {
             initializeRecommendationData()
         }
 
@@ -80,43 +79,44 @@ class RecipeRecommendationSystem @Inject constructor(
         val currentVectors = recipeVectorsMap ?: return@withContext emptyList()
         val currentTitles = recipeTitlesMap ?: return@withContext emptyList()
 
-        // --- 1. PEMBENTUKAN VEKTOR QUERY USER ---
-        val cleanUserIngredients = userIngredients.map { it.trim().lowercase() }
-        val userVector = mutableMapOf<String, Float>()
+        val cleanUserIngredients = userIngredients.map { rawInput ->
+            rawInput.trim()
+                .lowercase()
+                .replace(" ", "_") // 🟢 Mengunci spasi kembali menjadi underscore (_) agar sinkron 100% dengan database kamu
+        }.distinct()
 
+        // --- 2. PEMBENTUKAN VEKTOR QUERY USER ---
+        val userVector = mutableMapOf<String, Float>()
         for (ingredient in cleanUserIngredients) {
             val idfValue = currentIdf[ingredient] ?: 0f
             if (idfValue > 0f) {
-                userVector[ingredient] = idfValue // Bobot W_iq (TF [1] * IDF)
+                userVector[ingredient] = idfValue
             }
         }
 
-        // Jika tidak ada satu pun bahan masukan yang dikenali kamus IDF, batalkan kalkulasi
+// Pantau hasilnya di Logcat untuk sidang
+        android.util.Log.d("Chefly_Math_Debug", "Bahan dari UI: $userIngredients")
+        android.util.Log.d("Chefly_Math_Debug", "Format yang masuk ke Cosine: $cleanUserIngredients")
+        android.util.Log.d("Chefly_Math_Debug", "Vector Query Terbentuk: $userVector")
+
         if (userVector.isEmpty()) return@withContext emptyList()
 
-        // Menghitung Magnitude / Panjang Vektor Query (|Q|)
+        // --- 2. PERHITUNGAN COSINE SIMILARITY (Tetap Murni Tanpa Merusak Rumus Matematika) ---
         var userMagnitudeSquared = 0f
-        for (weight in userVector.values) {
-            userMagnitudeSquared += weight * weight
-        }
+        for (weight in userVector.values) { userMagnitudeSquared += weight * weight }
         val userMagnitude = sqrt(userMagnitudeSquared)
         if (userMagnitude == 0f) return@withContext emptyList()
 
         val results = mutableListOf<RecommendationResult>()
 
-        // --- 2. PERHITUNGAN COSINE SIMILARITY TERHADAP SETIAP DOKUMEN RESEP ---
         for ((recipeId, ingredientsVector) in currentVectors) {
             var dotProduct = 0f
             var recipeMagnitudeSquared = 0f
 
-            // Menghitung Magnitude Vektor Dokumen Resep (|D|)
-            for (weight in ingredientsVector.values) {
-                recipeMagnitudeSquared += weight * weight
-            }
+            for (weight in ingredientsVector.values) { recipeMagnitudeSquared += weight * weight }
             val recipeMagnitude = sqrt(recipeMagnitudeSquared)
             if (recipeMagnitude == 0f) continue
 
-            // Menghitung Perkalian Titik (Dot Product) Vektor pada komponen irisan
             for ((ingredient, userWeight) in userVector) {
                 val recipeWeight = ingredientsVector[ingredient] ?: 0f
                 if (recipeWeight > 0f) {
@@ -124,18 +124,15 @@ class RecipeRecommendationSystem @Inject constructor(
                 }
             }
 
-            // Rumus: Cosine Similarity = (Q . D) / (|Q| * |D|)
             val cosineSimilarityScore = if (dotProduct > 0f) {
                 dotProduct / (userMagnitude * recipeMagnitude)
             } else {
                 0f
             }
 
-            // Hanya kumpulkan resep dengan nilai kecocokan di atas 0%
             if (cosineSimilarityScore > 0f) {
                 results.add(
                     RecommendationResult(
-                        // Konversi String ID ke Int saat parsing data bersih ke UI model
                         recipeId = recipeId.toIntOrNull() ?: 0,
                         title = currentTitles[recipeId] ?: "Resep #$recipeId",
                         similarityScore = cosineSimilarityScore
@@ -144,7 +141,6 @@ class RecipeRecommendationSystem @Inject constructor(
             }
         }
 
-        // --- 3. PROSES PERANGKINGAN (DESCENDING SORTING) ---
         return@withContext results.sortedByDescending { it.similarityScore }
     }
 }

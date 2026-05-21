@@ -57,8 +57,11 @@ fun RecipeDetailScreen(
             TopAppBar(
                 title = { Text("Chefly", color = Terracotta, fontWeight = FontWeight.Bold) },
                 navigationIcon = {
-                    IconButton(onClick = { navController.navigateUp() }) {
-                        Icon(Icons.Default.ArrowBack, "Back", tint = Terracotta)
+                    // Di dalam RecipeDetailScreen.kt pada bagian klik back:
+                    IconButton(onClick = {
+                        navController.navigateUp() // 🟢 Menggunakan navigateUp agar tumpukan backstack di atasnya dilepas secara alami tanpa menghancurkan state bawah
+                    }) {
+                        Icon(Icons.Default.ArrowBack, contentDescription = null)
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.White)

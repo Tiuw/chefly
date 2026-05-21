@@ -181,6 +181,9 @@ class RecipeViewModel @Inject constructor(
     /**
      * Jalankan Komputasi TF-IDF & Cosine Similarity Skripsi
      */
+    /**
+     * Jalankan Komputasi TF-IDF & Cosine Similarity Skripsi
+     */
     private fun executeCosineRecommendation(rawQuery: String) {
         _uiState.update { it.copy(isLoading = true, isAiSearchActive = true) }
         viewModelScope.launch(Dispatchers.Default) {
@@ -198,17 +201,24 @@ class RecipeViewModel @Inject constructor(
                 // 2. Jalankan perhitungan spasial vector jarak Cosine Similarity
                 val aiRecommendations = recommendationSystem.getRecommendations(ingredientsList)
 
+                // Tambahkan Log untuk memastikan hitungan Cosine-mu menghasilkan ID resep
+                Log.d("Chefly_Debug", "Hasil Cosine mendeteksi total: ${aiRecommendations.size} resep cocok.")
+
                 // 3. Tarik data ID favorit saat ini
                 val currentFavoriteIds = favoriteManager.favoriteIds.first()
 
-                // 4. 🟢 FIX MUTLAK PARAMETER: Ambil objek resep utuh dari database lewat repository
-                //    supaya parameter category, ingredients, steps, dan imageUrl aslinya terisi semua!
+                // 4. 🟢 PERBAIKAN MUTLAK: Konversi ID dengan aman sebelum melempar ke repository
                 val finalAiResults = aiRecommendations.mapNotNull { aiResult ->
-                    // Ambil resep utuh dari repository berdasarkan ID hasil perangkingan
-                    val fullRecipe = repository.getRecipeById(context, aiResult.recipeId.toString())
+                    // Ambil resep utuh dari repository (Pastikan string id bersih tanpa spasi)
+                    val fullRecipe = repository.getRecipeById(context, aiResult.recipeId.toString().trim())
 
-                    // Pasangkan status favorit dan pastikan objek tidak null
-                    fullRecipe?.copy(isFavorite = currentFavoriteIds.contains(aiResult.recipeId.toString()))
+                    if (fullRecipe != null) {
+                        fullRecipe.copy(isFavorite = currentFavoriteIds.contains(fullRecipe.id))
+                    } else {
+                        // Jika null, log ID-nya untuk mendeteksi apakah data resep memang tidak ada di DB Room
+                        Log.e("RecipeViewModel", "ID Resep #${aiResult.recipeId} ada di data TF-IDF tapi tidak ditemukan di Room DB!")
+                        null
+                    }
                 }
 
                 _uiState.update {

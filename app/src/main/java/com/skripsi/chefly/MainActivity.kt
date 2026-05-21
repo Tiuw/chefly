@@ -96,64 +96,45 @@ fun MainScreen() {
                         navController.navigate(Screen.TambahBahan.route)
                     },
                     onNavigateToResult = { selectedIngredients ->
-                        // 1. Normalisasi label bahan menggunakan fungsi toDatabaseKey()
-                        val dbKeys = selectedIngredients.map { it.toDatabaseKey() }
-
-                        // 2. Gabungkan pakai koma menjadi string tunggal
-                        val searchString = dbKeys.joinToString(", ")
-                        val encodedQuery = Uri.encode(searchString)
-
-                        // 3. 🟢 KIRIM SEBAGAI PARAMETER 'query'
-                        navController.navigate("${Screen.Resep.route}?query=$encodedQuery") {
-                            popUpTo(Screen.Beranda.route) { saveState = true }
-                            launchSingleTop = true
-                            restoreState = true
+                        // 🟢 REVISI: Oper hasil kamera langsung ke query pencarian RecipeScreen
+                        val ingredientsCsv = selectedIngredients.joinToString(",")
+                        navController.navigate("${Screen.Resep.route}?query=$ingredientsCsv") {
+                            popUpTo(Screen.Beranda.route)
                         }
                     }
                 )
             }
 
-            // --- Add Ingredient Screen ---
+// --- Add Ingredient Screen ---
             composable(Screen.TambahBahan.route) {
                 AddIngredientScreen(
                     onBackClick = { navController.popBackStack() },
                     onNavigateToResult = { selectedIngredients ->
-                        // 1. Normalisasi label bahan manual menggunakan fungsi toDatabaseKey()
-                        val dbKeys = selectedIngredients.map { it.toDatabaseKey() }
-
-                        // 2. Gabungkan pakai koma menjadi string tunggal
-                        val searchString = dbKeys.joinToString(", ")
-                        val encodedQuery = Uri.encode(searchString)
-
-                        // 3. 🟢 KIRIM SEBAGAI PARAMETER 'query'
-                        navController.navigate("${Screen.Resep.route}?query=$encodedQuery") {
-                            popUpTo(Screen.Beranda.route) { saveState = true }
-                            launchSingleTop = true
-                            restoreState = true
+                        // 🟢 REVISI: Balikkan ke RecipeScreen sambil mengirimkan CSV ke parameter kueri
+                        val ingredientsCsv = selectedIngredients.joinToString(",")
+                        navController.navigate("${Screen.Resep.route}?query=$ingredientsCsv") {
+                            // Bersihkan tumpukan backstack agar saat back tidak memutar kembali ke input bahan
+                            popUpTo(Screen.Beranda.route) { saveState = false }
                         }
                     }
                 )
             }
 
-            // --- Terpadu: All Recipes Screen (Menggunakan struktur asli grid kamu) ---
+            // --- All Recipes Screen (Explore) ---
             composable(
-                route = "${Screen.Resep.route}?query={query}",
-                arguments = listOf(
-                    navArgument("query") {
-                        type = NavType.StringType
-                        nullable = true
-                        defaultValue = null
-                    }
-                )
+                route = "${Screen.Resep.route}?query={query}", // Menerima parameter kueri opsional
+                arguments = listOf(navArgument("query") {
+                    type = NavType.StringType
+                    nullable = true
+                    defaultValue = null
+                })
             ) { backStackEntry ->
-                // Tangkap argumen 'query' dari backStackEntry secara aman
-                val rawQuery = backStackEntry.arguments?.getString("query")
-                val decodedQuery = if (!rawQuery.isNullOrEmpty()) Uri.decode(rawQuery) else ""
+                val argumentQuery = backStackEntry.arguments?.getString("query") ?: ""
 
                 RecipeScreen(
-                    initialQuery = decodedQuery, // 🟢 Masuk ke parameter RecipeScreen
+                    initialQuery = argumentQuery, // 🟢 Oper kueri kiriman dari screen sebelumnya ke Compose
                     onRecipeClick = { id ->
-                        navController.navigate(Screen.RecipeDetail.createRoute(id.toString()))
+                        navController.navigate(Screen.RecipeDetail.createRoute(id))
                     },
                     onScanClick = {
                         navController.navigate(Screen.Pindai.route)
@@ -186,6 +167,7 @@ fun MainScreen() {
                 val viewModel: RecipeDetailViewModel = hiltViewModel()
 
                 RecipeDetailScreen(
+                    // 🟢 REVISI: Alihkan navigasi back agar memicu restoreState halaman resep
                     navController = navController,
                     recipeId = recipeId,
                     viewModel = viewModel

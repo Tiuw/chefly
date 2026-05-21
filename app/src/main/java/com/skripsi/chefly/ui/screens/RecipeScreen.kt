@@ -65,6 +65,15 @@ fun RecipeScreen(
     }
 
     // Jalankan loadNextPage saat user scroll ke bawah
+    LaunchedEffect(initialQuery) {
+        // Hanya jalankan pencarian baru jika initialQuery dikirimkan secara eksplisit (tidak kosong)
+        // dan berbeda dengan apa yang sedang dicari saat ini di ViewModel
+        if (initialQuery.isNotBlank() && initialQuery != uiState.searchQuery) {
+            viewModel.onSearchQueryChanged(initialQuery)
+        }
+    }
+
+    // Jalankan loadNextPage saat user scroll ke bawah
     LaunchedEffect(shouldLoadMore.value) {
         if (shouldLoadMore.value && !uiState.isLoadMore && !uiState.isEndReached) {
             viewModel.loadNextPage()
