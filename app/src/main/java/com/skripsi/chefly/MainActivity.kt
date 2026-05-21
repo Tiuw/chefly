@@ -1,5 +1,6 @@
 package com.skripsi.chefly
 
+import android.net.Uri
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -28,14 +29,13 @@ import com.skripsi.chefly.ui.screens.onboarding.OnboardingScreen
 import com.skripsi.chefly.ui.screens.splash.SplashScreen
 import com.skripsi.chefly.ui.theme.CheflyTheme
 import com.skripsi.chefly.ui.viewmodel.RecipeDetailViewModel
+import com.skripsi.chefly.util.toDatabaseKey
 import dagger.hilt.android.AndroidEntryPoint
 
 @AndroidEntryPoint
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
-
         val splashScreen = installSplashScreen()
-
         super.onCreate(savedInstanceState)
         setContent {
             CheflyTheme {
@@ -48,7 +48,6 @@ class MainActivity : ComponentActivity() {
 @Composable
 fun MainScreen() {
     val navController = rememberNavController()
-
     val navBackStackEntry by navController.currentBackStackEntryAsState()
     val currentRoute = navBackStackEntry?.destination?.route
 
@@ -78,7 +77,7 @@ fun MainScreen() {
                 HomeScreen(
                     onScanClick = { navController.navigate(Screen.Pindai.route) },
                     onRecipeClick = { id ->
-                        navController.navigate(Screen.RecipeDetail.createRoute(id))
+                        navController.navigate(Screen.RecipeDetail.createRoute(id.toString()))
                     },
                     onSeeAllClick = {
                         navController.navigate(Screen.Resep.route) {
@@ -91,28 +90,70 @@ fun MainScreen() {
             }
 
             // --- Camera/Scan Screen ---
-            composable(Screen.Pindai.route) {
-                CameraScreen(onAddMoreClick = {
-                    navController.navigate("tambah_bahan")
-                })
-            }
-
-            // --- Add Ingredient Screen ---
-            composable("tambah_bahan") {
-                AddIngredientScreen(
-                    onBackClick = { navController.popBackStack() },
+            composable(route = Screen.Pindai.route) {
+                CameraScreen(
+                    onAddMoreClick = {
+                        navController.navigate(Screen.TambahBahan.route)
+                    },
                     onNavigateToResult = { selectedIngredients ->
-                        // Navigasi ke hasil rekomendasi
-                        println("Bahan yang dipilih: $selectedIngredients")
+                        // 1. Normalisasi label bahan menggunakan fungsi toDatabaseKey()
+                        val dbKeys = selectedIngredients.map { it.toDatabaseKey() }
+
+                        // 2. Gabungkan pakai koma menjadi string tunggal
+                        val searchString = dbKeys.joinToString(", ")
+                        val encodedQuery = Uri.encode(searchString)
+
+                        // 3. 🟢 KIRIM SEBAGAI PARAMETER 'query'
+                        navController.navigate("${Screen.Resep.route}?query=$encodedQuery") {
+                            popUpTo(Screen.Beranda.route) { saveState = true }
+                            launchSingleTop = true
+                            restoreState = true
+                        }
                     }
                 )
             }
 
-            // --- All Recipes Screen ---
-            composable(Screen.Resep.route) {
+            // --- Add Ingredient Screen ---
+            composable(Screen.TambahBahan.route) {
+                AddIngredientScreen(
+                    onBackClick = { navController.popBackStack() },
+                    onNavigateToResult = { selectedIngredients ->
+                        // 1. Normalisasi label bahan manual menggunakan fungsi toDatabaseKey()
+                        val dbKeys = selectedIngredients.map { it.toDatabaseKey() }
+
+                        // 2. Gabungkan pakai koma menjadi string tunggal
+                        val searchString = dbKeys.joinToString(", ")
+                        val encodedQuery = Uri.encode(searchString)
+
+                        // 3. 🟢 KIRIM SEBAGAI PARAMETER 'query'
+                        navController.navigate("${Screen.Resep.route}?query=$encodedQuery") {
+                            popUpTo(Screen.Beranda.route) { saveState = true }
+                            launchSingleTop = true
+                            restoreState = true
+                        }
+                    }
+                )
+            }
+
+            // --- Terpadu: All Recipes Screen (Menggunakan struktur asli grid kamu) ---
+            composable(
+                route = "${Screen.Resep.route}?query={query}",
+                arguments = listOf(
+                    navArgument("query") {
+                        type = NavType.StringType
+                        nullable = true
+                        defaultValue = null
+                    }
+                )
+            ) { backStackEntry ->
+                // Tangkap argumen 'query' dari backStackEntry secara aman
+                val rawQuery = backStackEntry.arguments?.getString("query")
+                val decodedQuery = if (!rawQuery.isNullOrEmpty()) Uri.decode(rawQuery) else ""
+
                 RecipeScreen(
+                    initialQuery = decodedQuery, // 🟢 Masuk ke parameter RecipeScreen
                     onRecipeClick = { id ->
-                        navController.navigate(Screen.RecipeDetail.createRoute(id))
+                        navController.navigate(Screen.RecipeDetail.createRoute(id.toString()))
                     },
                     onScanClick = {
                         navController.navigate(Screen.Pindai.route)
@@ -120,16 +161,14 @@ fun MainScreen() {
                 )
             }
 
-            // Di dalam MainScreen() pada NavHost
+            // --- Saved Recipes Screen ---
             composable(Screen.Tersimpan.route) {
                 SavedScreen(
                     onRecipeClick = { id ->
-                        navController.navigate(Screen.RecipeDetail.createRoute(id))
+                        navController.navigate(Screen.RecipeDetail.createRoute(id.toString()))
                     },
                     onAddClick = {
-                        // PERBAIKAN: Navigasi ke RecipeScreen (Jelajah)
                         navController.navigate(Screen.Resep.route) {
-                            // Pastikan navigasi ini dianggap sebagai perpindahan Tab
                             popUpTo(Screen.Beranda.route) { saveState = true }
                             launchSingleTop = true
                             restoreState = true
@@ -167,7 +206,6 @@ fun MainScreen() {
 
 @Composable
 fun BottomNavigationBar(navController: NavHostController, currentRoute: String?) {
-    // Gunakan Color(0xFFE36C47) langsung atau panggil dari Theme agar konsisten
     val themeTerracotta = Color(0xFFE36C47)
 
     NavigationBar(
@@ -182,10 +220,12 @@ fun BottomNavigationBar(navController: NavHostController, currentRoute: String?)
         )
 
         items.forEach { (label, route, icon) ->
+            val isSelected = currentRoute?.startsWith(route) == true
+
             NavigationBarItem(
-                selected = currentRoute == route,
+                selected = isSelected,
                 onClick = {
-                    if (currentRoute != route) {
+                    if (!isSelected) {
                         navController.navigate(route) {
                             popUpTo(Screen.Beranda.route) { saveState = true }
                             launchSingleTop = true
@@ -208,11 +248,9 @@ fun BottomNavigationBar(navController: NavHostController, currentRoute: String?)
 }
 
 private fun shouldShowBottomBar(route: String?): Boolean {
-    // Bottom bar TIDAK boleh muncul di DetailScreen atau Onboarding
-    return route in listOf(
-        Screen.Beranda.route,
-        Screen.Pindai.route,
-        Screen.Resep.route,
-        Screen.Tersimpan.route
-    )
+    if (route == null) return false
+    return route.startsWith(Screen.Beranda.route) ||
+            route.startsWith(Screen.Pindai.route) ||
+            route.startsWith(Screen.Resep.route) ||
+            route.startsWith(Screen.Tersimpan.route)
 }

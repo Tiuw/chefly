@@ -17,7 +17,6 @@ interface RecipeDao {
     @Query("SELECT COUNT(*) FROM recipes")
     suspend fun getAllOnceCount(): Int
 
-
     @Query("SELECT * FROM recipes WHERE LOWER(category) LIKE '%' || LOWER(:category) || '%' ORDER BY loves DESC, id DESC LIMIT 50")
     suspend fun searchByCategoryLimited(category: String): List<RecipeEntity>
 

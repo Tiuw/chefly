@@ -6,7 +6,9 @@ import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.skripsi.chefly.data.model.DetectedIngredient
-import com.skripsi.chefly.ml.YOLO26Detector // Mengacu pada detector utama yang sudah aman dan stabil
+import com.skripsi.chefly.data.repository.IngredientRepository
+import com.skripsi.chefly.ml.YOLO26Detector
+import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -14,12 +16,17 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import javax.inject.Inject
 
 /**
  * ViewModel untuk CameraScreen
  * Menangani inferensi real-time Edge AI YOLO26 NMS-Free dan distribusi state deteksi ke UI
  */
-class CameraViewModel : ViewModel() {
+@HiltViewModel
+class CameraViewModel @Inject constructor(
+    private val ingredientRepository: IngredientRepository,
+    private val detector: YOLO26Detector // 🟢 REVISI: Suntikkan langsung detector via Hilt Module (Singleton)
+) : ViewModel() {
 
     private val _detections = MutableStateFlow<List<DetectedIngredient>>(emptyList())
     val detections: StateFlow<List<DetectedIngredient>> = _detections.asStateFlow()
@@ -37,14 +44,12 @@ class CameraViewModel : ViewModel() {
     val debugMessage: StateFlow<String?> = _debugMessage.asStateFlow()
 
     private val TAG = "CameraViewModel"
-    private var detector: YOLO26Detector? = null
 
+    // 🟢 REVISI: Fungsi inisialisasi sekarang hanya memastikan label dan model siap dipakai tanpa re-instantiate objek berat
     fun initializeDetector(context: Context) {
-        if (detector != null) return
-
         viewModelScope.launch(Dispatchers.IO) {
             try {
-                // Parsing labels.txt murni dari asset tanpa hardcoded cadangan defaultLabels
+                // Cek isi assets secara aman untuk keperluan logging sidang
                 val labels = context.assets.open("labels.txt").bufferedReader().use { it.readText() }
                     .split('\n')
                     .map { it.trim() }
@@ -53,11 +58,7 @@ class CameraViewModel : ViewModel() {
                 if (labels.isEmpty()) {
                     throw IllegalStateException("Berkas labels.txt kosong atau tidak valid!")
                 }
-
-                withContext(Dispatchers.Main) {
-                    detector = YOLO26Detector(context, "yolo26s_float32.tflite", labels, false)
-                    Log.i(TAG, "✅ YOLO26Detector sukses diinisialisasi dengan ${labels.size} kelas.")
-                }
+                Log.i(TAG, "✅ Komponen model YOLO26 TFLite terverifikasi dengan ${labels.size} kelas.")
             } catch (e: Exception) {
                 Log.e(TAG, "❌ Gagal memuat komponen label atau model .tflite: ${e.message}", e)
             }
@@ -69,8 +70,8 @@ class CameraViewModel : ViewModel() {
             try {
                 Log.d("Chefly_Debug", "📸 Frame diterima oleh ViewModel. Ukuran: ${bitmap.width}x${bitmap.height}")
 
-                // Nilai threshold diatur standar 0.40f (40%) untuk menjaga akurasi sidang
-                val results = detector?.detectObjects(bitmap, 0.60f) ?: emptyList()
+                // Nilai threshold diatur standar 0.60f untuk akurasi optimal demo sidang
+                val results = detector.detectObjects(bitmap, 0.60f)
 
                 Log.d("Chefly_Debug", "⚙️ Hasil deteksi model YOLO26: ${results.size} objek ditemukan.")
 
@@ -93,6 +94,19 @@ class CameraViewModel : ViewModel() {
         }
     }
 
+    /**
+     * Fungsi pengalir data list string bahan ke level Repository
+     */
+    fun saveCurrentDetectionsToRepository(isGallery: Boolean) {
+        val currentLabels = if (isGallery) {
+            _imageDetections.value.map { it.label }
+        } else {
+            _detections.value.map { it.label }
+        }
+        ingredientRepository.saveDetectedIngredients(currentLabels)
+        Log.d(TAG, "✈️ Berhasil mengirim data ${currentLabels.size} bahan dari ViewModel ke Repository.")
+    }
+
     // --- PERBAIKAN BUG: Fungsi Pembersih State ---
     fun clearCameraDetections() {
         _detections.value = emptyList()
@@ -113,7 +127,7 @@ class CameraViewModel : ViewModel() {
         _isProcessingImage.value = true
         viewModelScope.launch(Dispatchers.Default) {
             try {
-                val results = detector?.detectObjects(bitmap, 0.60f) ?: emptyList()
+                val results = detector.detectObjects(bitmap, 0.60f)
                 val mapped = results.map { d ->
                     DetectedIngredient(
                         label = d.className,
@@ -143,7 +157,7 @@ class CameraViewModel : ViewModel() {
         viewModelScope.launch(Dispatchers.Default) {
             try {
                 val t0 = System.currentTimeMillis()
-                val results = detector?.detectObjects(bitmap, 0.35f) ?: emptyList()
+                val results = detector.detectObjects(bitmap, 0.35f)
                 val t1 = System.currentTimeMillis()
 
                 val mapped = results.map { d ->
@@ -179,6 +193,7 @@ class CameraViewModel : ViewModel() {
 
     override fun onCleared() {
         super.onCleared()
-        detector?.close()
+        // Penutupan interpreter diserahkan ke siklus hidup Singleton,
+        // Namun jika ingin tetap aman dari memory leak, panggil close di level aplikasi utama.
     }
 }

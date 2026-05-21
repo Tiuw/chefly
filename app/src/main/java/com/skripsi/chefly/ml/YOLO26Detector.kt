@@ -14,7 +14,8 @@ import java.nio.ByteBuffer
 import java.nio.ByteOrder
 
 class YOLO26Detector(
-    private val context: Context,
+
+    context: Context,
     modelFilename: String,
     private val detectionClasses: List<String>,
     private val useNNAPI: Boolean = false

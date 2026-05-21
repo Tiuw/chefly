@@ -1,6 +1,7 @@
 package com.skripsi.chefly.ui.viewmodel
 
 import android.app.Application
+import android.util.Log
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.FlowPreview
@@ -13,9 +14,9 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.lifecycle.AndroidViewModel
 import com.skripsi.chefly.data.Recipe
 import com.skripsi.chefly.data.repository.RecipeRepository
+import com.skripsi.chefly.util.RecipeRecommendationSystem
 import kotlinx.coroutines.Dispatchers
 
-// UI State tetap sama
 data class RecipeUIState(
     val isLoading: Boolean = false,
     val isLoadMore: Boolean = false,
@@ -27,7 +28,8 @@ data class RecipeUIState(
     val searchQuery: String = "",
     val currentOffset: Int = 0,
     val isEndReached: Boolean = false,
-    val errorMessage: String? = null
+    val errorMessage: String? = null,
+    val isAiSearchActive: Boolean = false // 🟢 Menandai apakah sedang memakai mode perangkingan Cosine Similarity
 )
 
 data class CategoryData(
@@ -40,6 +42,7 @@ data class CategoryData(
 @HiltViewModel
 class RecipeViewModel @Inject constructor(
     private val repository: RecipeRepository,
+    private val recommendationSystem: RecipeRecommendationSystem, // 🟢 Suntikkan sistem rekomendasi TF-IDF milikmu
     application: Application
 ) : AndroidViewModel(application) {
 
@@ -88,7 +91,6 @@ class RecipeViewModel @Inject constructor(
         }
     }
 
-    // --- FUNGSI TOGGLE FAVORITE (MENGGUNAKAN DATASTORE) ---
     fun toggleFavorite(recipe: Recipe) {
         viewModelScope.launch {
             favoriteManager.toggleFavorite(recipe.id)
@@ -123,30 +125,42 @@ class RecipeViewModel @Inject constructor(
                 recipes = emptyList(),
                 currentOffset = 0,
                 isEndReached = false,
-                isLoading = true
+                isLoading = true,
+                isAiSearchActive = false
             )
         }
         _searchQuery.value = ""
         fetchFilteredRecipes()
     }
 
+    // 🟢 LOGIKA UTAMA: Menggabungkan Filter Lokal Bawaan dengan Mesin Perangkingan Cosine Similarity
     private fun fetchFilteredRecipes() {
         val state = _uiState.value
-        _uiState.update { it.copy(isLoading = true, recipes = emptyList()) }
 
+        // Cek apakah string query mengandung tanda koma sebagai indikator luapan data bahan
+        val isAiInput = state.searchQuery.contains(",")
+
+        if (isAiInput) {
+            executeCosineRecommendation(state.searchQuery)
+        } else {
+            executeStandardTextSearch(state)
+        }
+    }
+
+    /**
+     * Jalankan filter teks SQL standard bawaan rancangan awalmu
+     */
+    private fun executeStandardTextSearch(state: RecipeUIState) {
+        _uiState.update { it.copy(isLoading = true, isAiSearchActive = false) }
         viewModelScope.launch(Dispatchers.IO) {
             try {
-                // 1. Ambil data mentah dari DB
                 val rawResults = if (state.searchQuery.isNotBlank()) {
                     repository.searchRecipesWithFilters(context, state.searchQuery, state.selectedCategory, state.selectedMethod)
                 } else {
                     repository.getRecipesPaged(context, state.selectedCategory, state.selectedMethod, 0)
                 }
 
-                // 2. Ambil ID favorit yang ada saat ini dari DataStore secara manual (untuk inisialisasi)
                 val currentFavoriteIds = favoriteManager.favoriteIds.first()
-
-                // 3. Gabungkan: Tandai mana yang favorit
                 val finalResults = rawResults.map { recipe ->
                     recipe.copy(isFavorite = currentFavoriteIds.contains(recipe.id))
                 }
@@ -164,9 +178,57 @@ class RecipeViewModel @Inject constructor(
         }
     }
 
+    /**
+     * Jalankan Komputasi TF-IDF & Cosine Similarity Skripsi
+     */
+    private fun executeCosineRecommendation(rawQuery: String) {
+        _uiState.update { it.copy(isLoading = true, isAiSearchActive = true) }
+        viewModelScope.launch(Dispatchers.Default) {
+            try {
+                // 1. Pecah teks CSV kembali menjadi representasi elemen List bersih
+                val ingredientsList = rawQuery.split(",")
+                    .map { it.trim() }
+                    .filter { it.isNotEmpty() }
+
+                if (ingredientsList.isEmpty()) {
+                    _uiState.update { it.copy(isLoading = false, recipes = emptyList(), isAiSearchActive = false) }
+                    return@launch
+                }
+
+                // 2. Jalankan perhitungan spasial vector jarak Cosine Similarity
+                val aiRecommendations = recommendationSystem.getRecommendations(ingredientsList)
+
+                // 3. Tarik data ID favorit saat ini
+                val currentFavoriteIds = favoriteManager.favoriteIds.first()
+
+                // 4. 🟢 FIX MUTLAK PARAMETER: Ambil objek resep utuh dari database lewat repository
+                //    supaya parameter category, ingredients, steps, dan imageUrl aslinya terisi semua!
+                val finalAiResults = aiRecommendations.mapNotNull { aiResult ->
+                    // Ambil resep utuh dari repository berdasarkan ID hasil perangkingan
+                    val fullRecipe = repository.getRecipeById(context, aiResult.recipeId.toString())
+
+                    // Pasangkan status favorit dan pastikan objek tidak null
+                    fullRecipe?.copy(isFavorite = currentFavoriteIds.contains(aiResult.recipeId.toString()))
+                }
+
+                _uiState.update {
+                    it.copy(
+                        recipes = finalAiResults,
+                        isLoading = false,
+                        isEndReached = true // Hasil komputasi matriks langsung keluar utuh
+                    )
+                }
+            } catch (e: Exception) {
+                Log.e("RecipeViewModel", "Gagal menghitung matriks kecocokan AI: ${e.message}", e)
+                _uiState.update { it.copy(isLoading = false) }
+            }
+        }
+    }
+
     fun loadNextPage() {
         val state = _uiState.value
-        if (state.isLoadMore || state.isEndReached || state.searchQuery.isNotEmpty()) return
+        // Jika mode pencarian AI NMS-Free aktif, kunci mekanisme paging bawaan
+        if (state.isAiSearchActive || state.isLoadMore || state.isEndReached || state.searchQuery.isNotEmpty()) return
 
         _uiState.update { it.copy(isLoadMore = true) }
 

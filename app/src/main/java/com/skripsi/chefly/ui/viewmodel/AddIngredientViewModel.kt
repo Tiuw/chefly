@@ -5,6 +5,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.skripsi.chefly.data.repository.IngredientRepository
+import com.skripsi.chefly.util.RecipeRecommendationSystem // 🟢 IMPORT DARI UTILS
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -25,10 +26,10 @@ sealed class IngredientUiState {
     data class Error(val message: String) : IngredientUiState()
 }
 
-// --- 2. VIEWMODEL ---
 @HiltViewModel
 class AddIngredientViewModel @Inject constructor(
-    private val ingredientRepository: IngredientRepository
+    private val ingredientRepository: IngredientRepository,
+    private val recommendationSystem: RecipeRecommendationSystem // 🟢 SUNTIKKAN RECOMMENDATION SYSTEM
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow<IngredientUiState>(IngredientUiState.Loading)
@@ -39,6 +40,7 @@ class AddIngredientViewModel @Inject constructor(
 
     init {
         loadIngredients()
+        observeCameraDetections() // 🟢 JALANKAN OBSERVER CACHE DETEKSI
     }
 
     private fun loadIngredients() {
@@ -48,6 +50,29 @@ class AddIngredientViewModel @Inject constructor(
                 _uiState.value = IngredientUiState.Success(groups)
             } catch (e: Exception) {
                 _uiState.value = IngredientUiState.Error(e.message ?: "Terjadi kesalahan")
+            }
+        }
+    }
+
+    /**
+     * 🟢 MENGAMBIL CACHE KAMERA: Mengamati apakah ada bahan pangan kiriman dari YOLO26
+     */
+    private fun observeCameraDetections() {
+        viewModelScope.launch {
+            ingredientRepository.detectedIngredientsFromCamera.collect { cameraIngredients ->
+                if (cameraIngredients.isNotEmpty()) {
+                    // Format dari lowercase model (misal: "ayam_kampung")
+                    // menjadi format UI Group kamu (misal: "Ayam kampung") agar pencocokan String valid
+                    val formattedIngredients = cameraIngredients.map { name ->
+                        name.replace("_", " ").replaceFirstChar { it.uppercase() }
+                    }.toSet()
+
+                    // Masukkan ke dalam State bahan terpilih agar otomatis tercentang hijau di UI
+                    _selectedIngredients.value = _selectedIngredients.value + formattedIngredients
+
+                    // Bersihkan cache repository agar tidak ter-trigger berulang kali secara tidak sengaja
+                    ingredientRepository.clearDetectedIngredients()
+                }
             }
         }
     }

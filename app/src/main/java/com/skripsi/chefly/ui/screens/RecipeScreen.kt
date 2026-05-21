@@ -45,6 +45,7 @@ import com.skripsi.chefly.ui.viewmodel.RecipeViewModel
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun RecipeScreen(
+    initialQuery: String = "",
     onRecipeClick: (String) -> Unit,
     onScanClick: () -> Unit,
     viewModel: RecipeViewModel = hiltViewModel()

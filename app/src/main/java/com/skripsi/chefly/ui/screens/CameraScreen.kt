@@ -7,6 +7,7 @@ import android.graphics.BitmapFactory
 import android.graphics.ImageFormat
 import android.graphics.Rect
 import android.graphics.YuvImage
+import android.net.Uri
 import android.util.Log
 import android.view.ViewGroup
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -60,11 +61,15 @@ import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.PhotoCamera
 import androidx.compose.material.icons.filled.Collections
 import com.skripsi.chefly.ui.theme.DeepCharcoal
+import com.skripsi.chefly.ui.theme.SoftSage
+import com.skripsi.chefly.ui.theme.WhisperBorder
+import com.skripsi.chefly.util.toDatabaseKey
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
 fun CameraScreen(
     onAddMoreClick: () -> Unit,
+    onNavigateToResult: (List<String>) -> Unit, // Menerima callback data list string bahan dasar hasil deteksi
     viewModel: CameraViewModel = hiltViewModel()
 ) {
     val context = LocalContext.current
@@ -78,7 +83,7 @@ fun CameraScreen(
     // State penampung instance camera provider agar bisa dilepas bersih saat pindah page
     var cameraProviderInstance by remember { mutableStateOf<ProcessCameraProvider?>(null) }
 
-    // 🟢 LOCK NAVIGASI FLAG: Menandakan apakah halaman ini masih aktif dibuka user atau tidak
+    // LOCK NAVIGASI FLAG: Menandakan apakah halaman ini masih aktif dibuka user atau tidak
     var isScreenActive by remember { mutableStateOf(true) }
 
     // Ambil data State dari ViewModel
@@ -110,7 +115,7 @@ fun CameraScreen(
         }
     }
 
-    // 🟢 FIX MUTLAK NAVIGASI NAVBAR: Putus total hubungan thread kamera saat pindah menu
+    // FIX MUTLAK NAVIGASI NAVBAR: Putus total hubungan thread kamera saat pindah menu
     DisposableEffect(Unit) {
         onDispose {
             isScreenActive = false // Ubah status screen menjadi tidak aktif untuk menolak frame baru
@@ -155,7 +160,25 @@ fun CameraScreen(
         sheetContent = {
             DetectedIngredientsSheetContentContent(
                 detectedItems = activeDetectionsForSheet,
-                onAddMoreClick = onAddMoreClick
+                onAddMoreClick = {
+                    viewModel.saveCurrentDetectionsToRepository(isGallery = (activeTabUiState == 1))
+                    onAddMoreClick()
+                },
+                onSearchRecipesClick = { selectedList ->
+                    viewModel.saveCurrentDetectionsToRepository(isGallery = (activeTabUiState == 1))
+
+                    // 1. 🟢 GUNAKAN FUNGSI EKSTENSI: Map setiap item ke database key bersih kamu
+                    val dbNormalizedIngredients = selectedList.map { it.toDatabaseKey() }
+
+                    // 2. Gabungkan menjadi satu string CSV teks biasa dengan pembatas koma
+                    val searchString = dbNormalizedIngredients.joinToString(", ")
+
+                    // 3. Encode URI dan lempar ke rute query RecipeScreen utama
+                    val encodedQuery = Uri.encode(searchString)
+
+                    // 4. Trigger navigasi lewat callback onNavigateToResult (atau langsung via navController)
+                    onNavigateToResult(listOf(searchString))
+                }
             )
         },
         topBar = { CameraTopBar() }
@@ -199,7 +222,6 @@ fun CameraScreen(
                                     imageAnalysis.setAnalyzer(cameraExecutor) { imageProxy ->
                                         val currentTimestamp = System.currentTimeMillis()
 
-                                        // 🟢 LOCK NAVIGASI CONDITIONAL: Hanya lakukan inferensi YOLO jika screen benar-benar aktif dibuka
                                         if (isScreenActive && currentTimestamp - lastAnalyzedTimestamp >= 3500L) {
                                             lastAnalyzedTimestamp = currentTimestamp
                                             var bitmap = imageProxy.toBitmap()
@@ -209,7 +231,6 @@ fun CameraScreen(
                                                     val matrix = android.graphics.Matrix().apply { postRotate(rotationDegrees.toFloat()) }
                                                     bitmap = Bitmap.createBitmap(bitmap, 0, 0, bitmap.width, bitmap.height, matrix, true)
                                                 }
-                                                // Hanya panggil ViewModel jika navigasi Navbar tidak sedang ditekan
                                                 if (isScreenActive) {
                                                     viewModel.processCameraFrame(bitmap)
                                                 }
@@ -221,7 +242,6 @@ fun CameraScreen(
                                     val cameraSelector = CameraSelector.DEFAULT_BACK_CAMERA
                                     try {
                                         cameraProvider.unbindAll()
-                                        // Pastikan di-bind hanya jika screen masih aktif di layar depan
                                         if (isScreenActive) {
                                             cameraProvider.bindToLifecycle(lifecycleOwner, cameraSelector, preview, imageAnalysis)
                                         }
@@ -415,7 +435,8 @@ fun DetectionBox(label: String, modifier: Modifier) {
 @Composable
 fun DetectedIngredientsSheetContentContent(
     detectedItems: List<DetectedIngredient>,
-    onAddMoreClick: () -> Unit
+    onAddMoreClick: () -> Unit,
+    onSearchRecipesClick: (List<String>) -> Unit
 ) {
     Column(
         modifier = Modifier
@@ -451,12 +472,13 @@ fun DetectedIngredientsSheetContentContent(
 
         Spacer(modifier = Modifier.height(24.dp))
 
+        val uniqueIngredients = detectedItems.map { it.label }.distinct()
+
         FlowRow(
             horizontalArrangement = Arrangement.spacedBy(10.dp),
             verticalArrangement = Arrangement.spacedBy(10.dp),
             modifier = Modifier.fillMaxWidth()
         ) {
-            val uniqueIngredients = detectedItems.map { it.label }.distinct()
             uniqueIngredients.forEach { ingredient ->
                 IngredientChip(ingredient)
             }
@@ -483,7 +505,7 @@ fun DetectedIngredientsSheetContentContent(
         Spacer(modifier = Modifier.height(40.dp))
 
         Button(
-            onClick = { /* Menuju pencocokan berbasis Cosine Similarity */ },
+            onClick = { onSearchRecipesClick(uniqueIngredients) },
             modifier = Modifier
                 .fillMaxWidth()
                 .height(56.dp),

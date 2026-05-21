@@ -4,6 +4,7 @@ import android.content.Context
 import android.util.Log
 import com.skripsi.chefly.data.Recipe
 import com.skripsi.chefly.data.local.AppDatabase
+import com.skripsi.chefly.data.local.RecipeDao
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
@@ -17,7 +18,9 @@ import javax.inject.Singleton
  * Reads from Room (prepackaged DB) in background threads.
  */
 @Singleton
-class RecipeRepository @Inject constructor(){
+class RecipeRepository @Inject constructor(
+    private val recipeDao: RecipeDao
+){
 
     companion object {
         private var initialized = false
@@ -259,7 +262,6 @@ class RecipeRepository @Inject constructor(){
         .filter { it.isNotBlank() }
 
     private fun computeTokensForRecipe(recipe: Recipe): Set<String> {
-        // Karena titleCleaned dihapus, kita gunakan recipe.name
         val nameTokens = recipe.name.lowercase().split(Regex("\\s+"))
         val ingredientTokens = recipe.ingredientList.flatMap { splitAndNormalizeIngredient(it) }
         return (nameTokens + ingredientTokens).filter { it.isNotBlank() }.toSet()
