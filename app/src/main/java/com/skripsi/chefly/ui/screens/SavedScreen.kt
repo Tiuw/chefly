@@ -26,7 +26,7 @@ import coil.compose.AsyncImage
 import com.skripsi.chefly.data.Recipe
 import com.skripsi.chefly.ui.theme.MutedSlate
 import com.skripsi.chefly.ui.theme.WarmIvory
-import com.skripsi.chefly.ui.theme.Terracotta // Pastikan warna diimport benar
+import com.skripsi.chefly.ui.theme.Terracotta
 import com.skripsi.chefly.ui.viewmodel.SavedScreenViewModel
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -36,11 +36,9 @@ fun SavedScreen(
     onAddClick: () -> Unit,
     viewModel: SavedScreenViewModel = hiltViewModel()
 ) {
-    // Observasi data dari database secara reactive
     val savedRecipes by viewModel.savedRecipes.collectAsStateWithLifecycle()
     var searchQuery by remember { mutableStateOf("") }
 
-    // Filter lokal untuk fitur search di dalam SavedScreen
     val filteredRecipes = remember(searchQuery, savedRecipes) {
         if (searchQuery.isBlank()) savedRecipes
         else savedRecipes.filter { it.name.contains(searchQuery, ignoreCase = true) }
@@ -51,7 +49,7 @@ fun SavedScreen(
         topBar = {
             TopAppBar(
                 title = {
-                    Text("Resep Tersimpan", color = Color(0xFFE36C47), fontWeight = FontWeight.Bold)
+                    Text("Resep Tersimpan", color = Terracotta, fontWeight = FontWeight.Bold)
                 },
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.White),
                 modifier = Modifier.shadow(1.dp)
@@ -60,10 +58,9 @@ fun SavedScreen(
         floatingActionButton = {
             FloatingActionButton(
                 onClick = onAddClick,
-                containerColor = Color(0xFFE36C47),
+                containerColor = Terracotta,
                 contentColor = Color.White,
                 shape = CircleShape,
-                // Sesuaikan padding agar tidak menutupi area klik Bottom Nav
                 modifier = Modifier.padding(bottom = 16.dp)
             ) {
                 Icon(
@@ -102,7 +99,7 @@ fun SavedScreen(
                 }
             }
 
-            // 2. Recipe List (DIPERBAIKI: Hanya satu blok items dan kirim parameter onDeleteClick)
+            // 2. Recipe List
             if (filteredRecipes.isEmpty()) {
                 item { EmptySavedState() }
             } else {
@@ -110,7 +107,7 @@ fun SavedScreen(
                     SavedRecipeCard(
                         recipe = recipe,
                         onClick = { onRecipeClick(recipe.id) },
-                        onDeleteClick = { viewModel.removeFromFavorite(recipe.id) } // Sekarang parameter sudah dikirim
+                        onDeleteClick = { viewModel.removeFromFavorite(recipe.id) }
                     )
                     Spacer(Modifier.height(16.dp))
                 }
@@ -121,12 +118,11 @@ fun SavedScreen(
     }
 }
 
-// Update fungsi SavedRecipeCard
 @Composable
 fun SavedRecipeCard(
     recipe: Recipe,
     onClick: () -> Unit,
-    onDeleteClick: () -> Unit // Tambahkan parameter ini
+    onDeleteClick: () -> Unit
 ) {
     Card(
         modifier = Modifier
@@ -152,7 +148,7 @@ fun SavedRecipeCard(
                         .align(Alignment.TopEnd)
                         .size(36.dp)
                         .clickable(
-                            onClick = onDeleteClick, // Trigger hapus
+                            onClick = onDeleteClick,
                             indication = null,
                             interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }
                         ),
@@ -160,26 +156,23 @@ fun SavedRecipeCard(
                     color = Color.White.copy(alpha = 0.9f)
                 ) {
                     Icon(
-                        imageVector = Icons.Default.Bookmark, // Tetap bookmark isi karena ini halaman saved
+                        imageVector = Icons.Default.Bookmark,
                         contentDescription = "Hapus",
-                        tint = Color(0xFFE36C47),
+                        tint = Terracotta,
                         modifier = Modifier.padding(8.dp)
                     )
                 }
             }
 
-            Column(modifier = Modifier.padding(16.dp)) {
+            // 🟢 REFACTOR: Menghapus kategori resep teks, menyisakan Judul Resep saja dengan padding proporsional
+            Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 20.dp)) {
                 Text(
                     text = recipe.name,
                     fontSize = 18.sp,
                     fontWeight = FontWeight.Bold,
+                    color = Color(0xFF241916),
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
-                )
-                Text(
-                    text = recipe.category,
-                    fontSize = 14.sp,
-                    color = MutedSlate
                 )
             }
         }
@@ -198,7 +191,7 @@ fun EmptySavedState() {
         Box(
             modifier = Modifier
                 .size(128.dp)
-                .border(2.dp, Color(0xFFE0E0E0), CircleShape), // Gunakan WhisperBorder jika sudah ada di theme
+                .border(2.dp, Color(0xFFE0E0E0), CircleShape),
             contentAlignment = Alignment.Center
         ) {
             Icon(
@@ -215,7 +208,7 @@ fun EmptySavedState() {
             "Dapur Anda masih sepi",
             fontSize = 20.sp,
             fontWeight = FontWeight.Bold,
-            color = Color(0xFF333333) // Gunakan DeepCharcoal jika ada di theme
+            color = Color(0xFF241916)
         )
 
         Text(

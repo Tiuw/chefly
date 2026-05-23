@@ -29,7 +29,8 @@ data class RecipeUIState(
     val currentOffset: Int = 0,
     val isEndReached: Boolean = false,
     val errorMessage: String? = null,
-    val isAiSearchActive: Boolean = false // 🟢 Menandai apakah sedang memakai mode perangkingan Cosine Similarity
+    val isAiSearchActive: Boolean = false,
+    val isFromAiScanner: Boolean = false // 🟢 SUNTIKKAN BARIS INI (Default false)
 )
 
 data class CategoryData(
@@ -104,7 +105,23 @@ class RecipeViewModel @Inject constructor(
 
     fun onSearchQueryChanged(query: String) {
         _uiState.update { it.copy(searchQuery = query) }
+
+        // 🟢 Jika kueri tidak mengandung koma (artinya ketik manual/clear), pastikan flag scanner mati
+        if (!query.contains(",")) {
+            _uiState.update { it.copy(isFromAiScanner = false) }
+        }
         _searchQuery.value = query
+    }
+
+    // 🟢 Tambahkan fungsi baru ini di dalam RecipeViewModel.kt
+    fun triggerAiScannerInput(csvQuery: String) {
+        _uiState.update {
+            it.copy(
+                searchQuery = csvQuery,
+                isFromAiScanner = true // 🟢 Nyalakan hanya lewat jalur ini!
+            )
+        }
+        _searchQuery.value = csvQuery
     }
 
     private fun performSearch(query: String) {
@@ -261,7 +278,8 @@ class RecipeViewModel @Inject constructor(
                     it.copy(
                         recipes = finalAiResults,
                         isLoading = false,
-                        isEndReached = true // Hasil komputasi spasial matriks langsung keluar utuh satu halaman
+                        isEndReached = true,
+                        isFromAiScanner = false
                     )
                 }
             } catch (e: Exception) {

@@ -63,8 +63,16 @@ fun RecipeScreen(
         }
     }
 
+    // --- Di dalam RecipeScreen.kt ---
+    LaunchedEffect(initialQuery) {
+        if (initialQuery.isNotBlank() && initialQuery != uiState.searchQuery) {
+            // 🟢 Ganti fungsi lama menjadi triggerAiScannerInput
+            viewModel.triggerAiScannerInput(initialQuery)
+        }
+    }
+
     // 🟢 KONDISI KONTROL: Tampilkan layar transisi jika proses komputasi TF-IDF & Cosine sedang aktif
-    if (uiState.isLoading && uiState.isAiSearchActive) {
+    if (uiState.isLoading && uiState.isAiSearchActive && uiState.isFromAiScanner) {
         RecipeLoadingScreen(query = uiState.searchQuery)
     } else {
         // --- TAMPILAN UTAMA LIST REKOMENDASI RESEP ---
