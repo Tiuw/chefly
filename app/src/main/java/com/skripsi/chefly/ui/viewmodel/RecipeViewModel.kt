@@ -51,6 +51,11 @@ class RecipeViewModel @Inject constructor(
     private val _uiState = MutableStateFlow(RecipeUIState())
     val uiState = _uiState.asStateFlow()
 
+    // 🟢 Tambahkan fungsi ini di dalam RecipeViewModel.kt
+    fun disableLoadingPlaceholder() {
+        _uiState.update { it.copy(isLoading = false) }
+    }
+
     private val defaultCategories = listOf(
         CategoryData("Semua", Icons.Default.AllInclusive, true),
         CategoryData("Ayam", Icons.Default.Restaurant, false),
@@ -195,8 +200,7 @@ class RecipeViewModel @Inject constructor(
     /**
      * Jalankan Komputasi TF-IDF & Cosine Similarity Skripsi
      */
-    private fun executeCosineRecommendation(rawQuery: String) {
-        // 1. Ambil state saat ini di awal untuk mendapatkan filter metode memasak yang sedang dipilih user
+    fun executeCosineRecommendation(rawQuery: String) {
         val currentState = _uiState.value
         val activeMethod = currentState.selectedMethod
 

@@ -9,7 +9,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.collectAsState // 🟢 TAMBAHAN IMPORT
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -29,9 +29,9 @@ import com.skripsi.chefly.ui.screens.*
 import com.skripsi.chefly.ui.screens.onboarding.OnboardingScreen
 import com.skripsi.chefly.ui.screens.splash.SplashScreen
 import com.skripsi.chefly.ui.theme.CheflyTheme
-import com.skripsi.chefly.ui.viewmodel.MainViewModel // 🟢 TAMBAHAN IMPORT
+import com.skripsi.chefly.ui.viewmodel.MainViewModel
 import com.skripsi.chefly.ui.viewmodel.RecipeDetailViewModel
-import com.skripsi.chefly.util.toDatabaseKey
+import com.skripsi.chefly.ui.viewmodel.RecipeViewModel
 import dagger.hilt.android.AndroidEntryPoint
 
 @AndroidEntryPoint
@@ -49,13 +49,12 @@ class MainActivity : ComponentActivity() {
 
 @Composable
 fun MainScreen(
-    mainViewModel: MainViewModel = hiltViewModel() // 🟢 INJEKSI MAINVIEWMODEL DI SINI
+    mainViewModel: MainViewModel = hiltViewModel()
 ) {
     val navController = rememberNavController()
     val navBackStackEntry by navController.currentBackStackEntryAsState()
     val currentRoute = navBackStackEntry?.destination?.route
 
-    // 🟢 Amati status preferensi onboarding dari DataStore secara asinkron
     val isOnboardingCompleted by mainViewModel.isOnboardingCompleted.collectAsState()
 
     Scaffold(
@@ -73,15 +72,12 @@ fun MainScreen(
             // --- Splash Screen ---
             composable("splash") {
                 SplashScreen(onTimeout = {
-                    // 🟢 Cek kondisi status onboarding jika dataStore sudah selesai memuat nilai (not null)
                     if (isOnboardingCompleted != null) {
                         if (isOnboardingCompleted == true) {
-                            // Jika pengguna LAMA, langsung bypass ke Beranda
                             navController.navigate(Screen.Beranda.route) {
                                 popUpTo("splash") { inclusive = true }
                             }
                         } else {
-                            // Jika pengguna BARU, arahkan ke Onboarding
                             navController.navigate(Screen.Onboarding.route) {
                                 popUpTo("splash") { inclusive = true }
                             }
@@ -93,9 +89,18 @@ fun MainScreen(
             // --- Home Screen ---
             composable(Screen.Beranda.route) {
                 HomeScreen(
-                    onScanClick = { navController.navigate(Screen.Pindai.route) },
+                    onScanClick = {
+                        navController.navigate(Screen.Pindai.route) {
+                            popUpTo(Screen.Beranda.route) { saveState = true }
+                            launchSingleTop = true
+                            restoreState = true
+                        }
+                    },
                     onRecipeClick = { id ->
-                        navController.navigate(Screen.RecipeDetail.createRoute(id.toString()))
+                        // 🟢 Gunakan format replace agar ID masuk sebagai Path Parameter utama
+                        navController.navigate(
+                            "${Screen.RecipeDetail.route.replace("{recipeId}", id)}?query=&similarity=0"
+                        )
                     },
                     onSeeAllClick = {
                         navController.navigate(Screen.Resep.route) {
@@ -115,6 +120,7 @@ fun MainScreen(
                     },
                     onNavigateToResult = { selectedIngredients ->
                         val ingredientsCsv = selectedIngredients.joinToString(",")
+                        // 🟢 DIREVISI: Langsung lempar ke Screen Resep bawaan membawa data CSV
                         navController.navigate("${Screen.Resep.route}?query=$ingredientsCsv") {
                             popUpTo(Screen.Beranda.route)
                         }
@@ -128,6 +134,7 @@ fun MainScreen(
                     onBackClick = { navController.popBackStack() },
                     onNavigateToResult = { selectedIngredients ->
                         val ingredientsCsv = selectedIngredients.joinToString(",")
+                        // 🟢 DIREVISI: Langsung lempar ke Screen Resep membawa data CSV (Mengganti pemicu crash)
                         navController.navigate("${Screen.Resep.route}?query=$ingredientsCsv") {
                             popUpTo(Screen.Beranda.route) { saveState = false }
                         }
@@ -148,7 +155,9 @@ fun MainScreen(
 
                 RecipeScreen(
                     initialQuery = argumentQuery,
+                    // --- Di dalam Resep/Explore (MainActivity.kt) ---
                     onRecipeClick = { id, score ->
+                        // 🟢 Menyuntikkan ID, Query Bahan, dan Skor Vektor Cosine secara utuh
                         navController.navigate(
                             "${Screen.RecipeDetail.route.replace("{recipeId}", id)}?query=$argumentQuery&similarity=$score"
                         )
@@ -162,8 +171,11 @@ fun MainScreen(
             // --- Saved Recipes Screen ---
             composable(Screen.Tersimpan.route) {
                 SavedScreen(
+                    // --- Di dalam Tersimpan (MainActivity.kt) ---
                     onRecipeClick = { id ->
-                        navController.navigate(Screen.RecipeDetail.createRoute(id.toString()))
+                        navController.navigate(
+                            "${Screen.RecipeDetail.route.replace("{recipeId}", id)}?query=&similarity=0"
+                        )
                     },
                     onAddClick = {
                         navController.navigate(Screen.Resep.route) {
@@ -176,7 +188,9 @@ fun MainScreen(
             }
 
             // --- Recipe Detail Screen ---
+            // --- Deklarasi Komponen Detail di MainActivity.kt ---
             composable(
+                // 🟢 Pastikan polanya diawali dengan /{recipeId} baru diikuti oleh ?query dan &similarity
                 route = "${Screen.RecipeDetail.route}?query={query}&similarity={similarity}",
                 arguments = listOf(
                     navArgument("recipeId") { type = NavType.StringType },
@@ -202,10 +216,7 @@ fun MainScreen(
             // --- Onboarding ---
             composable(Screen.Onboarding.route) {
                 OnboardingScreen(onFinish = {
-                    // 🟢 1. Simpan flag status ke DataStore agar tidak dimunculkan lagi saat buka aplikasi berikutnya
                     mainViewModel.completeOnboarding()
-
-                    // 🟢 2. Pindah ke Beranda dan singkirkan Onboarding dari stack navigasi
                     navController.navigate(Screen.Beranda.route) {
                         popUpTo(Screen.Onboarding.route) { inclusive = true }
                     }

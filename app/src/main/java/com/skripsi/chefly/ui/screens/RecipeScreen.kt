@@ -1,5 +1,13 @@
 package com.skripsi.chefly.ui.screens
 
+import androidx.compose.animation.Crossfade
+import androidx.compose.animation.core.EaseInOut
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.*
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -14,8 +22,12 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.composed
+import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.scale
 import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
@@ -33,12 +45,13 @@ import com.skripsi.chefly.data.Recipe
 import com.skripsi.chefly.ui.theme.*
 import com.skripsi.chefly.ui.viewmodel.CategoryData
 import com.skripsi.chefly.ui.viewmodel.RecipeViewModel
+import kotlinx.coroutines.delay
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun RecipeScreen(
     initialQuery: String = "",
-    onRecipeClick: (String, Float) -> Unit, // 🟢 Sudah sinkron menerima ID dan Score
+    onRecipeClick: (String, Float) -> Unit,
     onScanClick: () -> Unit,
     viewModel: RecipeViewModel = hiltViewModel()
 ) {
@@ -50,117 +63,294 @@ fun RecipeScreen(
         }
     }
 
-    Scaffold(
-        topBar = { ExploreTopBar() },
-        containerColor = WarmIvory
-    ) { innerPadding ->
+    // 🟢 KONDISI KONTROL: Tampilkan layar transisi jika proses komputasi TF-IDF & Cosine sedang aktif
+    if (uiState.isLoading && uiState.isAiSearchActive) {
+        RecipeLoadingScreen(query = uiState.searchQuery)
+    } else {
+        // --- TAMPILAN UTAMA LIST REKOMENDASI RESEP ---
+        Scaffold(
+            topBar = { ExploreTopBar() },
+            containerColor = WarmIvory
+        ) { innerPadding ->
 
-        LazyColumn(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(innerPadding),
-            contentPadding = PaddingValues(
-                start = 16.dp,
-                end = 16.dp,
-                top = 16.dp,
-                bottom = 120.dp
-            ),
-            verticalArrangement = Arrangement.spacedBy(16.dp)
-        ) {
-            item {
-                SearchBarSection(
-                    query = uiState.searchQuery,
-                    onQueryChange = { viewModel.onSearchQueryChanged(it) }
-                )
-            }
-
-            item {
-                Column {
-                    Text(
-                        text = "Metode Memasak",
-                        fontSize = 18.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = Color.Black,
-                        modifier = Modifier.padding(vertical = 8.dp)
+            LazyColumn(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(innerPadding),
+                contentPadding = PaddingValues(
+                    start = 16.dp,
+                    end = 16.dp,
+                    top = 16.dp,
+                    bottom = 120.dp
+                ),
+                verticalArrangement = Arrangement.spacedBy(16.dp)
+            ) {
+                item {
+                    SearchBarSection(
+                        query = uiState.searchQuery,
+                        onQueryChange = { viewModel.onSearchQueryChanged(it) }
                     )
-                    LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        items(uiState.cookingMethods) { method ->
-                            FilterChip(
-                                selected = uiState.selectedMethod == method,
-                                onClick = { viewModel.onMethodSelected(method) },
-                                label = { Text(method, fontSize = 11.sp, fontWeight = FontWeight.SemiBold) },
-                                shape = RoundedCornerShape(999.dp),
-                                colors = FilterChipDefaults.filterChipColors(
-                                    selectedContainerColor = CheflyPrimaryContainer,
-                                    selectedLabelColor = CheflyOnPrimaryContainer,
-                                    containerColor = PureSurface,
-                                    labelColor = CheflyOnSurfaceVariant
+                }
+
+                item {
+                    Column {
+                        Text(
+                            text = "Metode Memasak",
+                            fontSize = 18.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = Color.Black,
+                            modifier = Modifier.padding(vertical = 8.dp)
+                        )
+                        LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            items(uiState.cookingMethods) { method ->
+                                FilterChip(
+                                    selected = uiState.selectedMethod == method,
+                                    onClick = { viewModel.onMethodSelected(method) },
+                                    label = { Text(method, fontSize = 11.sp, fontWeight = FontWeight.SemiBold) },
+                                    shape = RoundedCornerShape(999.dp),
+                                    colors = FilterChipDefaults.filterChipColors(
+                                        selectedContainerColor = CheflyPrimaryContainer,
+                                        selectedLabelColor = CheflyOnPrimaryContainer,
+                                        containerColor = PureSurface,
+                                        labelColor = CheflyOnSurfaceVariant
+                                    )
                                 )
-                            )
+                            }
                         }
                     }
                 }
-            }
 
-            item {
-                CategoriesSection(
-                    categories = uiState.categories,
-                    onCategoryClick = { viewModel.onCategorySelected(it) }
-                )
-            }
-
-            item {
-                Text(
-                    text = if (uiState.isAiSearchActive) "Hasil Perangkingan Cosine Similarity" else "Rekomendasi untuk Anda",
-                    fontSize = 18.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = Color.Black,
-                    modifier = Modifier.padding(vertical = 4.dp)
-                )
-            }
-
-            items(
-                items = uiState.recipes,
-                key = { it.id }
-            ) { recipe ->
-                ExtendedRecipeCard(
-                    recipe = recipe,
-                    isAiMode = uiState.isAiSearchActive,
-                    currentQuery = uiState.searchQuery,
-                    onClick = {
-                        // 🟢 FIX MATCH: Terbungkus blok lambda untuk mencegah Type Mismatch Error
-                        onRecipeClick(recipe.id, recipe.similarity)
-                    },
-                    onFavoriteClick = { viewModel.toggleFavorite(recipe) }
-                )
-            }
-
-            if (uiState.isLoadMore) {
                 item {
-                    Box(
-                        modifier = Modifier.fillMaxWidth().padding(16.dp),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        CircularProgressIndicator(modifier = Modifier.size(32.dp), color = Terracotta)
-                    }
+                    CategoriesSection(
+                        categories = uiState.categories,
+                        onCategoryClick = { viewModel.onCategorySelected(it) }
+                    )
                 }
-            }
 
-            if (uiState.isEndReached && uiState.recipes.isNotEmpty()) {
                 item {
                     Text(
-                        text = "Semua resep telah dimuat",
-                        fontSize = 12.sp,
-                        color = Color.Gray,
-                        textAlign = TextAlign.Center,
-                        modifier = Modifier.fillMaxWidth().padding(16.dp)
+                        text = if (uiState.isAiSearchActive) "Hasil Perangkingan Cosine Similarity" else "Rekomendasi untuk Anda",
+                        fontSize = 18.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = Color.Black,
+                        modifier = Modifier.padding(vertical = 4.dp)
                     )
+                }
+
+                items(
+                    items = uiState.recipes,
+                    key = { it.id }
+                ) { recipe ->
+                    ExtendedRecipeCard(
+                        recipe = recipe,
+                        isAiMode = uiState.isAiSearchActive,
+                        currentQuery = uiState.searchQuery,
+                        onClick = {
+                            onRecipeClick(recipe.id, recipe.similarity)
+                        },
+                        onFavoriteClick = { viewModel.toggleFavorite(recipe) }
+                    )
+                }
+
+                if (uiState.isLoadMore) {
+                    item {
+                        Box(
+                            modifier = Modifier.fillMaxWidth().padding(16.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            CircularProgressIndicator(modifier = Modifier.size(32.dp), color = Terracotta)
+                        }
+                    }
+                }
+
+                if (uiState.isEndReached && uiState.recipes.isNotEmpty()) {
+                    item {
+                        Text(
+                            text = "Semua resep telah dimuat",
+                            fontSize = 12.sp,
+                            color = Color.Gray,
+                            textAlign = TextAlign.Center,
+                            modifier = Modifier.fillMaxWidth().padding(16.dp)
+                        )
+                    }
                 }
             }
         }
     }
 }
 
+// 🟢 JEMBATAN TRANSISI: Tampilan Animasi Loading Sinkron
+@Composable
+fun RecipeLoadingScreen(query: String) {
+    val statusMessages = remember {
+        listOf(
+            "Menganalisis bahan...",
+            "Menghitung Cosine Similarity...",
+            "Mencari resep terbaik untukmu...",
+            "Hampir selesai..."
+        )
+    }
+
+    var currentMessageIndex by remember { mutableStateOf(0) }
+
+    LaunchedEffect(Unit) {
+        while (true) {
+            delay(1500)
+            currentMessageIndex = (currentMessageIndex + 1) % statusMessages.size
+        }
+    }
+
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(WarmIvory)
+    ) {
+        // --- DEKORASI BACKGROUND BLUR ---
+        Box(
+            modifier = Modifier
+                .offset(x = (-100).dp, y = (-100).dp)
+                .size(300.dp)
+                .background(Terracotta.copy(alpha = 0.05f), CircleShape)
+                .blur(80.dp)
+        )
+        Box(
+            modifier = Modifier
+                .align(Alignment.BottomEnd)
+                .offset(x = 80.dp, y = 80.dp)
+                .size(250.dp)
+                .background(SoftSage.copy(alpha = 0.05f), CircleShape)
+                .blur(80.dp)
+        )
+
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(24.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center
+        ) {
+            // --- ANIMASI LOGO PULSE ---
+            val infiniteTransition = rememberInfiniteTransition(label = "pulse")
+            val pulseScale by infiniteTransition.animateFloat(
+                initialValue = 1.0f,
+                targetValue = 1.06f,
+                animationSpec = infiniteRepeatable(
+                    animation = tween(900, easing = EaseInOut),
+                    repeatMode = RepeatMode.Reverse
+                ),
+                label = "scale"
+            )
+
+            Box(
+                modifier = Modifier
+                    .scale(pulseScale)
+                    .size(96.dp)
+                    .shadow(6.dp, CircleShape)
+                    .background(PureSurface, CircleShape),
+                contentAlignment = Alignment.Center
+            ) {
+                Box(modifier = Modifier.size(128.dp).background(Terracotta.copy(alpha = 0.08f), CircleShape))
+                Icon(
+                    imageVector = Icons.Default.SoupKitchen,
+                    contentDescription = null,
+                    tint = Terracotta,
+                    modifier = Modifier.size(48.dp)
+                )
+            }
+
+            Spacer(modifier = Modifier.height(48.dp))
+
+            Text(
+                text = "Mempersiapkan Resepmu",
+                fontSize = 20.sp,
+                fontWeight = FontWeight.Medium,
+                color = Color(0xFF241916)
+            )
+
+            Spacer(modifier = Modifier.height(24.dp))
+
+            // Progress Bar Indeterminate dengan Kilau Shimmer Efek Berjalan
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(8.dp)
+                    .clip(CircleShape)
+                    .background(WhisperBorder)
+            ) {
+                LinearProgressIndicator(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .shimmerModifier(), // Memicu refleksi linear gradient metalik
+                    color = Terracotta,
+                    trackColor = Color.Transparent
+                )
+            }
+
+            Spacer(modifier = Modifier.height(24.dp))
+
+            // --- CROSSFADE STATUS TEXT ---
+            Box(modifier = Modifier.height(24.dp), contentAlignment = Alignment.Center) {
+                Crossfade(
+                    targetState = statusMessages[currentMessageIndex],
+                    animationSpec = tween(durationMillis = 400),
+                    label = "status_crossfade"
+                ) { textMessage ->
+                    Text(
+                        text = textMessage,
+                        fontSize = 18.sp,
+                        fontWeight = FontWeight.Medium,
+                        color = Terracotta,
+                        textAlign = TextAlign.Center
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.height(16.dp))
+
+            // --- TECHNICAL DETAIL SUBTEXT ---
+            Box(
+                modifier = Modifier
+                    .border(1.dp, WhisperBorder, RoundedCornerShape(12.dp))
+                    .background(PureSurface.copy(alpha = 0.5f), RoundedCornerShape(12.dp))
+                    .padding(horizontal = 24.dp, vertical = 12.dp)
+            ) {
+                Text(
+                    text = "AI Engine: v4.2.0 • Precision Mode",
+                    fontSize = 14.sp,
+                    color = MutedSlate.copy(alpha = 0.7f)
+                )
+            }
+        }
+    }
+}
+
+// 🟢 MODIFIER EXTENSION: Lokasi Penempatan Reusable Shimmer Token
+fun Modifier.shimmerModifier(): Modifier = this.composed {
+    val transition = rememberInfiniteTransition(label = "shimmer_loop")
+    val translateAnim by transition.animateFloat(
+        initialValue = 0f,
+        targetValue = 1000f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(durationMillis = 1200, easing = LinearEasing),
+            repeatMode = RepeatMode.Restart
+        ),
+        label = "shimmer_translation"
+    )
+
+    this.background(
+        brush = Brush.linearGradient(
+            colors = listOf(
+                Color.White.copy(alpha = 0.0f),
+                Color.White.copy(alpha = 0.3f),
+                Color.White.copy(alpha = 0.0f)
+            ),
+            start = androidx.compose.ui.geometry.Offset(translateAnim - 300f, 0f),
+            end = androidx.compose.ui.geometry.Offset(translateAnim, 0f)
+        )
+    )
+}
+
+// --- KOMPONEN SUB-UI PENDUKUNG ---
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ExploreTopBar() {
@@ -272,7 +462,6 @@ fun ExtendedRecipeCard(
     onClick: () -> Unit,
     onFavoriteClick: () -> Unit
 ) {
-    // 🟢 LOCK CONDITION: Memisahkan nama bahan HANYA jika query terisi DAN flag isAiMode aktif
     val ingredientAnalysis = remember(recipe, currentQuery, isAiMode) {
         val allRecipeIngredients = recipe.ingredientList
 
@@ -371,7 +560,6 @@ fun ExtendedRecipeCard(
                     }
                 }
 
-                // 🟢 HIDE CONDITIONAL LAYOUT: Menyembunyikan boks bahan sepenuhnya jika dalam mode search manual teks
                 if (isAiMode) {
                     Column(
                         modifier = Modifier
@@ -420,7 +608,6 @@ fun ExtendedRecipeCard(
                         }
                     }
                 } else {
-                    // Berikan sedikit jarak napas pengganti boks jika dalam mode resep reguler
                     Spacer(modifier = Modifier.height(8.dp))
                 }
 
