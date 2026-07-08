@@ -8,6 +8,9 @@ import kotlinx.coroutines.flow.Flow
 
 @Dao
 interface RecipeDao {
+
+    // --- Query untuk Tabel recipes ---
+
     @Query("SELECT * FROM recipes ORDER BY id DESC")
     fun getAll(): Flow<List<RecipeEntity>>
 
@@ -21,31 +24,15 @@ interface RecipeDao {
     suspend fun searchByCategoryLimited(category: String): List<RecipeEntity>
 
     @Query("""
-    SELECT * FROM recipes 
-    WHERE LOWER(category) LIKE '%' || LOWER(:category) || '%' 
-    ORDER BY loves DESC, id DESC 
-    LIMIT :limit OFFSET :offset
-""")
+        SELECT * FROM recipes 
+        WHERE LOWER(category) LIKE '%' || LOWER(:category) || '%' 
+        ORDER BY loves DESC, id DESC 
+        LIMIT :limit OFFSET :offset
+    """)
     suspend fun getRecipesByCategoryPaginated(
         category: String,
         limit: Int,
         offset: Int
-    ): List<RecipeEntity>
-
-    @Query("""
-    SELECT * FROM recipes 
-    WHERE (
-        LOWER(title) LIKE '%' || LOWER(:query) || '%' 
-        OR REPLACE(LOWER(ui_ingredients), '_', ' ') LIKE '%' || LOWER(:query) || '%'
-    )
-    AND (:category = 'Semua' OR LOWER(category) LIKE '%' || LOWER(:category) || '%')
-    AND (:method = 'Semua' OR LOWER(primary_cooking_method) = LOWER(:method))
-    ORDER BY loves DESC LIMIT 100
-""")
-    suspend fun searchByKeywordCategoryAndMethod(
-        query: String,
-        category: String,
-        method: String
     ): List<RecipeEntity>
 
     @Query(
@@ -60,29 +47,20 @@ interface RecipeDao {
     )
     suspend fun searchByKeyword(query: String): List<RecipeEntity>
 
-    @Query("""
-    SELECT * FROM recipes 
-    WHERE (:category = 'Semua' OR LOWER(category) LIKE '%' || LOWER(:category) || '%') 
-    AND (:method = 'Semua' OR LOWER(primary_cooking_method) = LOWER(:method))
-    ORDER BY loves DESC, id DESC 
-    LIMIT :limit OFFSET :offset
-""")
-    suspend fun getRecipesWithFilters(
-        category: String,
-        method: String,
-        limit: Int,
-        offset: Int
-    ): List<RecipeEntity>
-
-    @Query("""
-    SELECT * FROM recipes 
-    WHERE (LOWER(title) LIKE '%' || LOWER(:query) || '%' 
-       OR LOWER(ui_ingredients) LIKE '%' || LOWER(:query) || '%' 
-       OR LOWER(category) LIKE '%' || LOWER(:query) || '%')
-    AND (:method = 'Semua' OR LOWER(primary_cooking_method) = LOWER(:method))
-    ORDER BY loves DESC LIMIT 100
-""")
-    suspend fun searchByKeywordAndMethod(query: String, method: String): List<RecipeEntity>
+    /**
+     * Digunakan oleh Repository untuk pencarian kombinasi kata kunci dan kategori
+     * saat query pengguna hanya mengandung satu kata.
+     */
+    @Query(
+        """
+        SELECT * FROM recipes
+        WHERE (LOWER(title) LIKE '%' || LOWER(:query) || '%' OR LOWER(ui_ingredients) LIKE '%' || LOWER(:query) || '%')
+          AND LOWER(category) LIKE '%' || LOWER(:category) || '%'
+        ORDER BY loves DESC, id DESC
+        LIMIT 100
+        """
+    )
+    suspend fun searchByKeywordAndCategory(query: String, category: String): List<RecipeEntity>
 
     @Query(
         """
@@ -95,6 +73,10 @@ interface RecipeDao {
 
     @Query("SELECT * FROM recipes ORDER BY loves DESC LIMIT :limit")
     suspend fun getRecommendedRecipes(limit: Int): List<RecipeEntity>
+
+    @Query("SELECT * FROM recipes WHERE id = :id LIMIT 1")
+    suspend fun getById(id: String): RecipeEntity?
+
 
     // --- Query untuk Tabel tfidf_data ---
 
@@ -116,8 +98,8 @@ interface RecipeDao {
     @Query("SELECT * FROM idf_dictionary WHERE ingredient IN (:ingredients)")
     suspend fun getIdfWeightsForIngredients(ingredients: List<String>): List<IdfDictionaryEntity>
 
-    @Query("SELECT * FROM recipes WHERE id = :id LIMIT 1")
-    suspend fun getById(id: String): RecipeEntity?
+
+    // --- Operasi CUD (Create, Update, Delete) ---
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insert(recipe: RecipeEntity): Long
@@ -134,5 +116,3 @@ interface RecipeDao {
     @Query("DELETE FROM recipes")
     suspend fun clearAll()
 }
-
-

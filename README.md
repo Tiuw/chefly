@@ -1,223 +1,471 @@
 # Chefly - AI-Powered Recipe App
 
-Chefly is a modern Android recipe application with real-time ingredient detection using YOLOv8 TFLite model. Point your camera at ingredients and get recipe recommendations!
+Chefly adalah aplikasi Android modern untuk resep dengan deteksi bahan real-time menggunakan model YOLO26 TFLite. Arahkan kamera Anda ke bahan-bahan makanan dan dapatkan rekomendasi resep!
 
-## Features
+## ✨ Fitur Utama
 
-### 🎥 Real-time Ingredient Detection
-- Uses YOLOv8 TFLite model for fast, on-device object detection
-- Detects common food ingredients through your camera
-- Shows bounding boxes and confidence scores in real-time
+### 🎥 Deteksi Bahan Real-time
+- Menggunakan model YOLO26 TFLite untuk deteksi objek cepat on-device
+- Deteksi bahan makanan umum melalui kamera
+- Menampilkan bounding boxes dan confidence scores secara real-time
+- Support untuk foto dari galeri atau kamera langsung
 
-### 📖 Recipe Browsing
-- Browse through a variety of recipes
-- Search recipes by name or ingredients
-- View detailed recipe information including ingredients, instructions, prep time, and cooking time
+### 📖 Browsing Resep
+- Lihat berbagai koleksi resep
+- Cari resep berdasarkan nama atau bahan
+- Lihat informasi lengkap resep termasuk bahan, langkah memasak, metode memasak, dan kategori
 
-### ❤️ Favorites
-- Save your favorite recipes
-- Quick access to all your favorite recipes in one place
+### ❤️ Resep Favorit
+- Simpan resep favorit Anda
+- Akses cepat ke semua resep yang disimpan dalam satu tempat
+- Persistent storage menggunakan Room Database
 
-### 🔍 Smart Recipe Search
-- Get recipe recommendations based on detected ingredients
-- Automatic ingredient-based filtering
-- Find recipes that match what you have in your kitchen
+### 🔍 Pencarian Resep Cerdas
+- Dapatkan rekomendasi resep berdasarkan bahan yang terdeteksi
+- Filtering berbasis bahan otomatis
+- Temukan resep yang cocok dengan apa yang ada di dapur Anda
+- Similarity scoring menggunakan cosine similarity
 
-### 📱 Modern UI
-- Built with Jetpack Compose
-- Material Design 3
-- Adaptive navigation for different screen sizes
+### ➕ Tambah Bahan Manual
+- Tambahkan bahan makanan secara manual jika deteksi otomatis tidak akurat
+- Pilih dari daftar bahan yang tersedia
+- Cari resep berdasarkan bahan yang dipilih
+
+### 🎨 UI Modern
+- Dibangun dengan Jetpack Compose
+- Material Design 3 dengan tema custom (Terracotta, Warm Ivory, etc.)
+- Responsive navigation untuk berbagai ukuran layar
+- Animated transitions dan Lottie animations
 - Beautiful card-based layout
 
-## Technology Stack
+### 🚀 Onboarding & Splash Screen
+- Welcome screen yang menarik untuk pengguna baru
+- Splash screen dengan animation
+- Persistent onboarding state menggunakan DataStore
+
+## 🛠️ Technology Stack
 
 - **Language**: Kotlin
 - **UI Framework**: Jetpack Compose
 - **ML Framework**: TensorFlow Lite
-- **Model**: YOLOv8n (Nano version for mobile)
+- **Model**: YOLO26 (640x640 resolution)
 - **Camera**: CameraX
 - **Navigation**: Navigation Compose
+- **Database**: Room Database
+- **Dependency Injection**: Hilt
 - **Image Loading**: Coil
+- **State Management**: Flow & StateFlow
+- **Animation**: Compose Animation + Lottie
+- **Persistence**: DataStore Preferences
 - **Architecture**: MVVM with ViewModel
 
-## Project Structure
+## 📁 Project Structure
 
 ```
 app/
 ├── data/
-│   ├── Recipe.kt              # Recipe and DetectedIngredient data classes
-│   └── RecipeRepository.kt    # Recipe data source
+│   ├── Recipe.kt                    # Domain Model untuk Recipe
+│   ├── local/
+│   │   ├── AppDatabase.kt           # Room Database definition
+│   │   ├── RecipeDao.kt             # Data Access Object
+│   │   └── entity/                  # Database entities
+│   ├── model/
+│   │   ├── DetectedIngredient.kt    # Model untuk bahan terdeteksi
+│   │   └── OnboardingPage.kt        # Model untuk halaman onboarding
+│   └── repository/
+│       ├── RecipeRepository.kt      # Repository untuk Recipe dengan pagination
+│       └── IngredientRepository.kt  # Repository untuk Ingredient
 ├── ml/
-│   └── ObjectDetector.kt      # YOLOv8 TFLite wrapper
+│   ├── YOLO26Detector.kt            # YOLO26 TFLite wrapper dengan optimasi
+│   └── DetectionTypes.kt            # Type definitions untuk deteksi
 ├── ui/
-│   ├── RecipeViewModel.kt     # Shared ViewModel
 │   ├── navigation/
-│   │   └── Screen.kt          # Navigation destinations
+│   │   └── Screen.kt                # Navigation destinations
 │   ├── screens/
-│   │   ├── CameraScreen.kt    # Real-time detection screen
-│   │   ├── HomeScreen.kt      # Recipe browsing screen
-│   │   ├── RecipeDetailScreen.kt  # Recipe details
-│   │   └── FavoritesAndProfileScreens.kt
+│   │   ├── HomeScreen.kt            # Home/Beranda - Tampilkan resep suggested
+│   │   ├── CameraScreen.kt          # Pindai - Real-time detection
+│   │   ├── RecipeScreen.kt          # Resep - Browse & cari resep
+│   │   ├── RecipeDetailScreen.kt    # Detail resep dengan similarity score
+│   │   ├── SavedScreen.kt           # Tersimpan - Resep yang disimpan
+│   │   ├── AddIngredientScreen.kt   # TambahBahan - Tambah bahan manual
+│   │   ├── onboarding/
+│   │   │   ├── OnboardingScreen.kt
+│   │   │   ├── OnboardingContent.kt
+│   │   │   └── components/          # Komponen onboarding
+│   │   └── splash/
+│   │       └── SplashScreen.kt      # Splash screen saat startup
+│   ├── viewmodel/
+│   │   ├── MainViewModel.kt         # State management untuk onboarding
+│   │   ├── HomeViewModel.kt         # ViewModel untuk HomeScreen
+│   │   ├── CameraViewModel.kt       # ViewModel untuk camera & detection
+│   │   ├── RecipeViewModel.kt       # ViewModel untuk recipe browsing
+│   │   ├── RecipeDetailViewModel.kt # ViewModel untuk recipe detail
+│   │   ├── SavedScreenViewModel.kt  # ViewModel untuk saved recipes
+│   │   ├── AddIngredientViewModel.kt# ViewModel untuk add ingredient
+│   │   └── SharedViewModel.kt       # Shared state antar screens
 │   └── theme/
-│       └── ...                # Material Theme configuration
-└── MainActivity.kt            # Main entry point
+│       └── ...                      # Material Theme 3 & custom colors
+├── di/
+│   ├── DatabaseModule.kt            # Hilt module untuk database
+│   └── CoilImageLoaderFactory.kt    # Hilt module untuk image loading
+├── util/
+│   └── ...                          # Utility functions
+├── CheflyApplication.kt             # Hilt Android App
+└── MainActivity.kt                  # Main entry point
 ```
 
-## How It Works
+## 🔄 Alur Kerja Deteksi Bahan
 
 ### Object Detection Flow
 
-1. **Camera Preview**: CameraX provides real-time camera feed
-2. **Image Processing**: Each frame is captured and preprocessed
-3. **YOLOv8 Inference**: TFLite model runs inference on-device
-4. **Post-processing**: Non-Maximum Suppression filters overlapping detections
-5. **UI Update**: Detected ingredients are displayed with bounding boxes
+1. **Preview Kamera**: CameraX menyediakan feed kamera real-time
+2. **Capture Image**: Image diambil dari image analysis callback
+3. **Preprocessing**: Bitmap di-resize ke 640x640 dan dikonversi ke tensor input
+4. **YOLO26 Inference**: TFLite model menjalankan inference on-device
+5. **Post-processing**: 
+   - Parse output tensor (1 x 25200 x 4+numClasses)
+   - Apply confidence threshold (default: 0.4f)
+   - Non-Maximum Suppression untuk filter deteksi overlap
+   - Scale kembali ke ukuran asli frame
+6. **UI Update**: Bahan terdeteksi ditampilkan dengan bounding boxes dan labels
 
-### Recipe Matching
+### Recipe Matching Flow
 
-1. User points camera at ingredients
-2. System detects and identifies ingredients
-3. User clicks "Find Recipes" button
-4. App filters recipes that contain detected ingredients
-5. Results are sorted by number of matching ingredients
+1. User arahkan kamera ke bahan makanan
+2. Sistem deteksi dan identifikasi bahan (bisa juga manual via AddIngredientScreen)
+3. User tap "Temukan Resep" atau sistem navigate otomatis
+4. App filter recipes yang mengandung bahan terdeteksi
+5. Calculate cosine similarity antara detected ingredients dan recipe ingredients
+6. Results ditampilkan diurutkan berdasarkan similarity score
+7. Data query dipasskan ke RecipeDetail sebagai context
 
-## Setup Instructions
+## 📱 Navigasi & Screens
+
+### Bottom Navigation (4 Tabs)
+
+1. **Beranda (Home)** - Tampilkan resep yang disarankan, quick action untuk scan
+2. **Pindai (Scan)** - Real-time camera detection dan manual add ingredients
+3. **Resep (Recipes)** - Browse semua resep, search, dengan similarity filtering
+4. **Tersimpan (Saved)** - Tampilkan resep yang sudah disimpan sebagai favorit
+
+### Flow Navigasi
+
+```
+Splash Screen
+    ↓
+Onboarding Screen (jika pertama kali) / Home Screen
+    ↓
+Home Screen (Beranda)
+    ├─→ Camera Screen (Pindai)
+    │   ├─→ Add Ingredient Screen (TambahBahan)
+    │   └─→ Recipe Screen (Resep) dengan query
+    ├─→ Recipe Screen (Resep)
+    │   └─→ Recipe Detail Screen
+    └─→ Saved Screen (Tersimpan)
+        └─→ Recipe Detail Screen
+```
+
+## 🚀 Setup Instructions
 
 ### Prerequisites
 
-- Android Studio Hedgehog or later
-- Android SDK 28 or higher
-- Physical Android device or emulator with camera support
+- Android Studio Hedgehog atau lebih baru
+- Android SDK 28 (compileSdk 36)
+- Kotlin 1.9+
+- Physical Android device atau emulator dengan support kamera
 
 ### Installation
 
-1. Clone the repository
-2. Open project in Android Studio
+1. Clone repository
+2. Open project di Android Studio
 3. Sync Gradle dependencies
-4. Ensure `yolov8n.tflite` model is present in `app/src/main/ml/` directory
-5. Build and run the app
+4. Pastikan model YOLO26 ada di `app/src/main/ml/` directory
+5. Build dan run aplikasi
 
-### YOLOv8 Model
+### YOLO26 Model
 
-The app uses YOLOv8n TFLite model. Make sure the model file is placed at:
+Aplikasi menggunakan model YOLO26 TFLite dengan resolusi 640x640. Tempat model:
 ```
-app/src/main/ml/yolov8n.tflite
+app/src/main/ml/model_name.tflite
 ```
 
-The model is configured to detect:
-- Common food items (banana, apple, orange, broccoli, carrot, etc.)
-- Kitchen items (bottle, cup, bowl, fork, knife, spoon)
+Model dikonfigurasi untuk detect bahan makanan dari COCO dataset:
+- Makanan: apple, banana, orange, carrot, broccoli, sandwich, hot dog, pizza, donut, cake, dll
+- Kitchen items: bottle, cup, bowl, fork, knife, spoon, plate, dll
+- Total classes sesuai dengan COCO dataset
 
-## Permissions
+### Build Configuration
 
-The app requires the following permissions:
-- **CAMERA**: For real-time ingredient detection
-- **INTERNET**: For loading recipe images (optional)
+```gradle
+// build.gradle.kts
+android {
+    namespace = "com.skripsi.chefly"
+    compileSdk = 36
+    
+    defaultConfig {
+        minSdk = 28          // Android 9.0
+        targetSdk = 36
+    }
+    
+    buildFeatures {
+        compose = true
+        mlModelBinding = true  // Required untuk TFLite
+    }
+    
+    androidResources {
+        noCompress += "tflite"  // Prevent .tflite file compression
+    }
+}
+```
 
-## Usage
+## 📋 Permissions
 
-1. **Home Tab**: Browse all recipes, search by name or ingredients
-2. **Camera Tab**: 
-   - Grant camera permission when prompted
-   - Point camera at ingredients
-   - View detected ingredients in real-time
-   - Tap "Find Recipes" to get recommendations
-3. **Favorites Tab**: View all your saved favorite recipes
-4. **Profile Tab**: View app information
+Aplikasi memerlukan permission berikut:
 
-## Customization
+```xml
+<!-- AndroidManifest.xml -->
+<uses-permission android:name="android.permission.CAMERA" />
+<uses-permission android:name="android.permission.INTERNET" />
+```
 
-### Adding More Recipes
+## 💾 Persistence & Data
 
-Edit `RecipeRepository.kt` to add more recipes:
+### Room Database
+- Pre-packaged database dengan koleksi resep
+- Automatic initialization dari RecipeRepository
+- RecipeDao untuk akses data
 
+### Saved/Favorite Recipes
+- Stored di Room Database dengan flag `isFavorite`
+- Diakses via SavedScreen dengan SavedScreenViewModel
+- Toggle favorite status di RecipeDetailScreen
+
+### Onboarding State
+- Stored di DataStore Preferences
+- Managed via MainViewModel
+- Determines navigation flow di splash screen
+
+## 🎨 Theme & Styling
+
+Custom Material Design 3 theme dengan warna:
+- **Terracotta** (#E36C47) - Primary accent color
+- **Warm Ivory** - Background color
+- Custom color scheme untuk card, button, text
+
+## 📊 Data Models
+
+### Recipe
 ```kotlin
-Recipe(
-    id = 11,
-    name = "Your Recipe Name",
-    description = "Recipe description",
-    imageUrl = "https://image-url.com",
-    ingredients = listOf("ingredient1", "ingredient2"),
-    instructions = listOf("step1", "step2"),
-    prepTime = "10 min",
-    cookTime = "20 min",
-    servings = 4,
-    difficulty = "Easy",
-    category = "Category"
+data class Recipe(
+    val id: String,
+    val name: String,
+    val imageUrl: String,
+    val category: String,
+    val ingredients: String,      // Delimited string (comma, semicolon, etc)
+    val steps: String,            // Delimited string
+    val totalIngredients: Int?,
+    val totalSteps: Int?,
+    val loves: Int?,              // For popularity/sorting
+    val cookingMethod: String?,
+    val isFavorite: Boolean,
+    val similarity: Float = 0f    // Cosine similarity score
 )
 ```
 
-### Modifying Detection Labels
-
-Edit the `labels` list in `ObjectDetector.kt` to match your custom model's classes.
-
-### Adjusting Detection Threshold
-
-Modify `confidenceThreshold` in `ObjectDetector.kt` (default: 0.5):
-
+### DetectedIngredient
 ```kotlin
-val confidenceThreshold = 0.5f  // 50% confidence minimum
+data class DetectedIngredient(
+    val label: String,
+    val confidence: Float,
+    val boundingBox: RectF,
+    val imageUrl: String? = null
+)
 ```
 
-## Performance Optimization
+## 🔧 Customization
 
-- Uses YOLOv8n (nano) for fast inference
-- Multi-threaded CPU inference (4 threads)
-- NNAPI disabled (causes compatibility issues with YOLOv8)
-- Frame skipping with KEEP_ONLY_LATEST strategy
-- Single thread executor for inference
+### Adding/Editing Recipes
 
-## Troubleshooting
+Edit `RecipeRepository.kt` atau langsung update database:
 
-### App crashes on camera detection
-- **Solution**: NNAPI has been disabled in ObjectDetector.kt
-- This fixes "NN_RET_CHECK failed" and "output shapes vector" errors
-- If you enable NNAPI (`setUseNNAPI(true)`), it may crash on some devices
+```kotlin
+Recipe(
+    id = "11",
+    name = "Pizza Homemade",
+    imageUrl = "https://image-url.com",
+    category = "Italian",
+    ingredients = "flour,tomato,cheese,salt,water",
+    steps = "Mix flour and water\nAdd tomato sauce\nAdd cheese\nBake at 200C",
+    totalIngredients = 5,
+    totalSteps = 4,
+    loves = 150,
+    cookingMethod = "Baking"
+)
+```
 
-### Camera not working
-- Ensure camera permission is granted
-- Test on a physical device (emulator cameras may have limitations)
+### Modifying Detection Model
 
-### Model not loading
-- Verify `yolov8n.tflite` exists in `app/src/main/ml/`
-- Check model file is not corrupted
-- Enable `mlModelBinding` in build.gradle
-- Check Logcat for TensorFlow Lite errors
+Edit `YOLO26Detector.kt` untuk customize detection:
 
-### No ingredients detected
-- Ensure good lighting conditions
-- Hold camera steady and close to ingredients
-- Check that ingredients are in the COCO dataset
-- Try lowering confidence threshold in ObjectDetector.kt
-- Hold camera steady
-- Try adjusting confidence threshold
+```kotlin
+// Adjust confidence threshold
+companion object {
+    private const val DEFAULT_CONFIDENCE_THRESHOLD = 0.4f  // 40% confidence
+    private const val MAX_TOTAL_DETECTIONS = 10
+    private const val INPUT_SIZE = 640
+}
 
-## Future Enhancements
+// Ubah jumlah threads
+val options = Interpreter.Options().apply {
+    setNumThreads(4)  // Adjust untuk performance
+    setUseXNNPACK(true)
+    setUseNNAPI(false)
+}
+```
 
-- [ ] User authentication and cloud sync
-- [ ] Custom recipe creation
+### Custom Theme Colors
+
+Edit theme file untuk customize warna:
+- Primary color
+- Secondary color
+- Background colors
+- Text colors
+
+## ⚡ Performance Optimization
+
+- **YOLO26n pada 640x640** untuk balance accuracy vs speed
+- **Multi-threaded inference (4 threads)** untuk CPU optimization
+- **XNNPACK enabled** untuk ARM CPU acceleration
+- **NNAPI disabled** (dapat cause crashes pada beberapa device)
+- **Memory optimization**: Global buffer allocation di YOLO26Detector init
+- **Image cache** via Coil untuk recipe images
+- **DataStore** untuk efficient preference storage
+- **Pagination** untuk recipe loading
+
+## 🐛 Troubleshooting
+
+### App crash pada camera detection
+- NNAPI sudah disabled di YOLO26Detector.kt
+- Fix untuk "NN_RET_CHECK failed" dan output shapes errors
+- Jika enable NNAPI (`setUseNNAPI(true)`), mungkin crash di beberapa device
+
+### Camera tidak bekerja
+- Pastikan permission camera sudah granted
+- Test di physical device (emulator kadang punya limitation)
+- Check Logcat untuk camera-related errors
+
+### Model tidak load
+- Verify `model.tflite` ada di `app/src/main/ml/`
+- Check file tidak corrupted
+- Enable `mlModelBinding` di build.gradle
+- Disable compression: `noCompress += "tflite"`
+- Check Logcat untuk TensorFlow Lite errors
+
+### Tidak ada bahan yang terdeteksi
+- Pastikan pencahayaan cukup baik
+- Hold camera steady dan dekat ke ingredient
+- Check ingredient ada di COCO dataset
+- Try lowering confidence threshold di YOLO26Detector.kt
+- Test dengan gambar dari galeri terlebih dahulu
+
+### Database initialization error
+- Clear app data dan reinstall
+- Check database file di `app/src/main/ml/` (jika preloaded)
+- Check RecipeRepository initialization di MainActivity
+
+### UI lag atau performance issues
+- Reduce thread count di YOLO26Detector (dari 4 ke 2)
+- Disable XNNPACK: `setUseXNNPACK(false)`
+- Reduce image resolution untuk preview
+- Check Logcat untuk memory leaks
+
+## 🔄 API & Response Format
+
+### Recipe API Response Format
+
+Jika menggunakan remote API di masa depan:
+
+```json
+{
+  "id": "1",
+  "name": "Recipe Name",
+  "imageUrl": "https://...",
+  "category": "Category",
+  "ingredients": "ingredient1,ingredient2,ingredient3",
+  "steps": "Step 1\nStep 2\nStep 3",
+  "totalIngredients": 3,
+  "totalSteps": 3,
+  "loves": 100,
+  "cookingMethod": "Cooking method"
+}
+```
+
+## 📚 Dependencies Utama
+
+```gradle
+// Compose & UI
+implementation("androidx.compose.material3:material3")
+implementation("androidx.compose.material:material-icons-extended:1.7.5")
+implementation("com.airbnb.android:lottie-compose:6.4.0")
+
+// ML & Camera
+implementation("org.tensorflow:tensorflow-lite:2.13.0")
+implementation("org.tensorflow:tensorflow-lite-support:0.4.4")
+implementation("androidx.camera:camera-core")
+implementation("androidx.camera:camera-camera2")
+implementation("androidx.camera:camera-lifecycle")
+implementation("androidx.camera:camera-view")
+
+// Database & Storage
+implementation("androidx.room:room-runtime:2.8.4")
+implementation("androidx.datastore:datastore-preferences:1.0.0")
+
+// Dependency Injection
+implementation("com.google.dagger:hilt-android:2.51")
+
+// Image Loading
+implementation("io.coil-kt:coil-compose:2.5.0")
+
+// Navigation
+implementation("androidx.navigation:navigation-compose")
+```
+
+## 🚀 Future Enhancements
+
+- [ ] User authentication & cloud sync
+- [ ] Custom recipe creation dari user
 - [ ] Shopping list generation
-- [ ] Nutritional information
-- [ ] Step-by-step cooking mode
+- [ ] Nutritional information display
+- [ ] Step-by-step cooking mode dengan timer
 - [ ] Voice commands
 - [ ] Social sharing features
-- [ ] Recipe ratings and reviews
-- [ ] Dietary filters (vegetarian, vegan, gluten-free)
+- [ ] Recipe ratings & reviews
+- [ ] Dietary filters (vegetarian, vegan, gluten-free, etc)
 - [ ] Meal planning calendar
+- [ ] Multiple language support
+- [ ] History tracking untuk detected ingredients
+- [ ] Advanced search filters
 
-## License
+## 📄 License
 
-This project is for educational purposes as part of a thesis (Skripsi) project.
+Proyek ini untuk keperluan pendidikan sebagai bagian dari proyek thesis (Skripsi).
 
-## Credits
+## 🙏 Credits
 
-- YOLOv8 by Ultralytics
-- TensorFlow Lite
-- Android Jetpack libraries
-- Material Design 3
-- Unsplash for recipe images
+- **YOLO26** - Ultralytics
+- **TensorFlow Lite** - Google
+- **Jetpack Libraries** - Google
+- **Material Design 3** - Google
+- **Recipe Images** - Unsplash & various sources
 
-## Contact
+## 📧 Contact
 
-For questions or suggestions, please contact the development team.
+Untuk pertanyaan atau saran, silakan hubungi tim development.
+
+---
+
+**Last Updated**: May 2026
+**Version**: 1.0
+**Min SDK**: Android 28 (9.0)
+**Target SDK**: Android 36
 

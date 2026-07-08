@@ -57,25 +57,18 @@ fun RecipeScreen(
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
 
+    // BERHASIL DISINKRONKAN: Memicu pipeline pencarian komputasi berbasis AI / YOLO26
     LaunchedEffect(initialQuery) {
         if (initialQuery.isNotBlank() && initialQuery != uiState.searchQuery) {
-            viewModel.onSearchQueryChanged(initialQuery)
-        }
-    }
-
-    // --- Di dalam RecipeScreen.kt ---
-    LaunchedEffect(initialQuery) {
-        if (initialQuery.isNotBlank() && initialQuery != uiState.searchQuery) {
-            // 🟢 Ganti fungsi lama menjadi triggerAiScannerInput
             viewModel.triggerAiScannerInput(initialQuery)
         }
     }
 
-    // 🟢 KONDISI KONTROL: Tampilkan layar transisi jika proses komputasi TF-IDF & Cosine sedang aktif
+    // KONDISI KONTROL: Tampilkan layar transisi jika proses komputasi TF-IDF & Cosine sedang aktif
     if (uiState.isLoading && uiState.isAiSearchActive && uiState.isFromAiScanner) {
         RecipeLoadingScreen(query = uiState.searchQuery)
     } else {
-        // --- TAMPILAN UTAMA LIST REKOMENDASI RESEP ---
+        // --- TAMPILAN UTAMA LIST REKOMENDASI RESEP LOKAL ---
         Scaffold(
             topBar = { ExploreTopBar() },
             containerColor = WarmIvory
@@ -100,33 +93,7 @@ fun RecipeScreen(
                     )
                 }
 
-                item {
-                    Column {
-                        Text(
-                            text = "Metode Memasak",
-                            fontSize = 18.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = Color.Black,
-                            modifier = Modifier.padding(vertical = 8.dp)
-                        )
-                        LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            items(uiState.cookingMethods) { method ->
-                                FilterChip(
-                                    selected = uiState.selectedMethod == method,
-                                    onClick = { viewModel.onMethodSelected(method) },
-                                    label = { Text(method, fontSize = 11.sp, fontWeight = FontWeight.SemiBold) },
-                                    shape = RoundedCornerShape(999.dp),
-                                    colors = FilterChipDefaults.filterChipColors(
-                                        selectedContainerColor = CheflyPrimaryContainer,
-                                        selectedLabelColor = CheflyOnPrimaryContainer,
-                                        containerColor = PureSurface,
-                                        labelColor = CheflyOnSurfaceVariant
-                                    )
-                                )
-                            }
-                        }
-                    }
-                }
+                // REVISI: Section "Metode Memasak" (LazyRow Filter Chips) Telah Dihapus Penuh
 
                 item {
                     CategoriesSection(
@@ -160,10 +127,21 @@ fun RecipeScreen(
                     )
                 }
 
+                // DETEKSI PAGINASI OTOMATIS SAAT USER SCROLL KE BAWAH
+                if (uiState.recipes.isNotEmpty() && !uiState.isEndReached && !uiState.isLoadMore) {
+                    item {
+                        LaunchedEffect(Unit) {
+                            viewModel.loadNextPage()
+                        }
+                    }
+                }
+
                 if (uiState.isLoadMore) {
                     item {
                         Box(
-                            modifier = Modifier.fillMaxWidth().padding(16.dp),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(16.dp),
                             contentAlignment = Alignment.Center
                         ) {
                             CircularProgressIndicator(modifier = Modifier.size(32.dp), color = Terracotta)
@@ -178,7 +156,9 @@ fun RecipeScreen(
                             fontSize = 12.sp,
                             color = Color.Gray,
                             textAlign = TextAlign.Center,
-                            modifier = Modifier.fillMaxWidth().padding(16.dp)
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(16.dp)
                         )
                     }
                 }
@@ -187,7 +167,6 @@ fun RecipeScreen(
     }
 }
 
-// 🟢 JEMBATAN TRANSISI: Tampilan Animasi Loading Sinkron
 @Composable
 fun RecipeLoadingScreen(query: String) {
     val statusMessages = remember {
@@ -213,7 +192,6 @@ fun RecipeLoadingScreen(query: String) {
             .fillMaxSize()
             .background(WarmIvory)
     ) {
-        // --- DEKORASI BACKGROUND BLUR ---
         Box(
             modifier = Modifier
                 .offset(x = (-100).dp, y = (-100).dp)
@@ -237,7 +215,6 @@ fun RecipeLoadingScreen(query: String) {
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.Center
         ) {
-            // --- ANIMASI LOGO PULSE ---
             val infiniteTransition = rememberInfiniteTransition(label = "pulse")
             val pulseScale by infiniteTransition.animateFloat(
                 initialValue = 1.0f,
@@ -277,7 +254,6 @@ fun RecipeLoadingScreen(query: String) {
 
             Spacer(modifier = Modifier.height(24.dp))
 
-            // Progress Bar Indeterminate dengan Kilau Shimmer Efek Berjalan
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -288,7 +264,7 @@ fun RecipeLoadingScreen(query: String) {
                 LinearProgressIndicator(
                     modifier = Modifier
                         .fillMaxSize()
-                        .shimmerModifier(), // Memicu refleksi linear gradient metalik
+                        .shimmerModifier(),
                     color = Terracotta,
                     trackColor = Color.Transparent
                 )
@@ -296,7 +272,6 @@ fun RecipeLoadingScreen(query: String) {
 
             Spacer(modifier = Modifier.height(24.dp))
 
-            // --- CROSSFADE STATUS TEXT ---
             Box(modifier = Modifier.height(24.dp), contentAlignment = Alignment.Center) {
                 Crossfade(
                     targetState = statusMessages[currentMessageIndex],
@@ -315,7 +290,6 @@ fun RecipeLoadingScreen(query: String) {
 
             Spacer(modifier = Modifier.height(16.dp))
 
-            // --- TECHNICAL DETAIL SUBTEXT ---
             Box(
                 modifier = Modifier
                     .border(1.dp, WhisperBorder, RoundedCornerShape(12.dp))
@@ -332,7 +306,6 @@ fun RecipeLoadingScreen(query: String) {
     }
 }
 
-// 🟢 MODIFIER EXTENSION: Lokasi Penempatan Reusable Shimmer Token
 fun Modifier.shimmerModifier(): Modifier = this.composed {
     val transition = rememberInfiniteTransition(label = "shimmer_loop")
     val translateAnim by transition.animateFloat(
@@ -358,7 +331,6 @@ fun Modifier.shimmerModifier(): Modifier = this.composed {
     )
 }
 
-// --- KOMPONEN SUB-UI PENDUKUNG ---
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ExploreTopBar() {

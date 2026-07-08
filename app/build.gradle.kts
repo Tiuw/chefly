@@ -75,6 +75,9 @@ dependencies {
     implementation(libs.androidx.compose.material3.adaptive.navigation.suite)
     implementation("androidx.compose.material:material-icons-extended:1.7.5")
 
+    // Lottie
+    implementation("com.airbnb.android:lottie-compose:6.4.0")
+
     // DataStore for SavedScreen
     implementation("androidx.datastore:datastore-preferences:1.0.0")
 

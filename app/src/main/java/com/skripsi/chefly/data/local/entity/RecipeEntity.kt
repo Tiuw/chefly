@@ -18,10 +18,7 @@ data class RecipeEntity(
     val imageUrl: String?,
 
     @ColumnInfo(name = "loves")
-    val loves: Int?, // Tetap untuk Popularitas/Sorting
-
-    @ColumnInfo(name = "primary_cooking_method")
-    val primaryCookingMethod: String?,
+    val loves: Int?, // Tetap untuk Popularitas/Sorting TF-IDF atau Cosine
 
     @ColumnInfo(name = "title")
     val title: String?,
@@ -36,7 +33,7 @@ data class RecipeEntity(
     val uiIngredients: String?,
 
     @ColumnInfo(name = "ui_steps")
-    val uiSteps: String?,
+    val uiSteps: String?
 ) {
     fun toDomain(): Recipe = Recipe(
         id = id,
@@ -47,7 +44,6 @@ data class RecipeEntity(
         steps = uiSteps ?: "",
         totalIngredients = totalIngredients,
         totalSteps = totalSteps,
-        loves = loves, // Popularitas
-        cookingMethod = primaryCookingMethod,
+        loves = loves
     )
 }

@@ -22,15 +22,13 @@ data class RecipeUIState(
     val isLoadMore: Boolean = false,
     val recipes: List<Recipe> = emptyList(),
     val categories: List<CategoryData> = emptyList(),
-    val cookingMethods: List<String> = listOf("Semua", "Goreng", "Tumis", "Rebus", "Kukus", "Panggang"),
     val selectedCategory: String = "",
-    val selectedMethod: String = "Semua",
     val searchQuery: String = "",
     val currentOffset: Int = 0,
     val isEndReached: Boolean = false,
     val errorMessage: String? = null,
     val isAiSearchActive: Boolean = false,
-    val isFromAiScanner: Boolean = false // 🟢 SUNTIKKAN BARIS INI (Default false)
+    val isFromAiScanner: Boolean = false
 )
 
 data class CategoryData(
@@ -43,7 +41,7 @@ data class CategoryData(
 @HiltViewModel
 class RecipeViewModel @Inject constructor(
     private val repository: RecipeRepository,
-    private val recommendationSystem: RecipeRecommendationSystem, // 🟢 Suntikkan sistem rekomendasi TF-IDF milikmu
+    private val recommendationSystem: RecipeRecommendationSystem, // Sistem rekomendasi TF-IDF & Cosine Similarity
     application: Application
 ) : AndroidViewModel(application) {
 
@@ -52,7 +50,6 @@ class RecipeViewModel @Inject constructor(
     private val _uiState = MutableStateFlow(RecipeUIState())
     val uiState = _uiState.asStateFlow()
 
-    // 🟢 Tambahkan fungsi ini di dalam RecipeViewModel.kt
     fun disableLoadingPlaceholder() {
         _uiState.update { it.copy(isLoading = false) }
     }
@@ -106,19 +103,17 @@ class RecipeViewModel @Inject constructor(
     fun onSearchQueryChanged(query: String) {
         _uiState.update { it.copy(searchQuery = query) }
 
-        // 🟢 Jika kueri tidak mengandung koma (artinya ketik manual/clear), pastikan flag scanner mati
         if (!query.contains(",")) {
             _uiState.update { it.copy(isFromAiScanner = false) }
         }
         _searchQuery.value = query
     }
 
-    // 🟢 Tambahkan fungsi baru ini di dalam RecipeViewModel.kt
     fun triggerAiScannerInput(csvQuery: String) {
         _uiState.update {
             it.copy(
                 searchQuery = csvQuery,
-                isFromAiScanner = true // 🟢 Nyalakan hanya lewat jalur ini!
+                isFromAiScanner = true
             )
         }
         _searchQuery.value = csvQuery
@@ -126,23 +121,6 @@ class RecipeViewModel @Inject constructor(
 
     private fun performSearch(query: String) {
         fetchFilteredRecipes()
-    }
-
-    fun onMethodSelected(method: String) {
-        if (_uiState.value.selectedMethod == method) return
-
-        // 1. Update status metode yang dipilih di UI terlebih dahulu
-        _uiState.update { it.copy(selectedMethod = method) }
-
-        // 2. Cek pemicu kueri search bar
-        val currentQuery = _uiState.value.searchQuery
-        if (currentQuery.contains(",")) {
-            // 🟢 Jika sedang dalam mode AI (ada koma), hitung ulang Cosine dengan filter barumu
-            executeCosineRecommendation(currentQuery)
-        } else {
-            // Jika sedang dalam mode pencarian teks biasa, jalankan pencarian SQL standar
-            fetchFilteredRecipes()
-        }
     }
 
     fun onCategorySelected(categoryName: String) {
@@ -166,11 +144,9 @@ class RecipeViewModel @Inject constructor(
         fetchFilteredRecipes()
     }
 
-    // 🟢 LOGIKA UTAMA: Menggabungkan Filter Lokal Bawaan dengan Mesin Perangkingan Cosine Similarity
+    // LOGIKA UTAMA: Menggabungkan Filter Kategori dengan Sistem Perangkingan Cosine Similarity
     private fun fetchFilteredRecipes() {
         val state = _uiState.value
-
-        // Cek apakah string query mengandung tanda koma sebagai indikator luapan data bahan
         val isAiInput = state.searchQuery.contains(",")
 
         if (isAiInput) {
@@ -181,16 +157,17 @@ class RecipeViewModel @Inject constructor(
     }
 
     /**
-     * Jalankan filter teks SQL standard bawaan rancangan awalmu
+     * Jalankan filter teks SQL standard bawaan Room DB
      */
     private fun executeStandardTextSearch(state: RecipeUIState) {
         _uiState.update { it.copy(isLoading = true, isAiSearchActive = false) }
         viewModelScope.launch(Dispatchers.IO) {
             try {
+                // REVISI: Parameter method dihapus dari pemanggilan repositori
                 val rawResults = if (state.searchQuery.isNotBlank()) {
-                    repository.searchRecipesWithFilters(context, state.searchQuery, state.selectedCategory, state.selectedMethod)
+                    repository.searchRecipesWithFilters(context, state.searchQuery, state.selectedCategory)
                 } else {
-                    repository.getRecipesPaged(context, state.selectedCategory, state.selectedMethod, 0)
+                    repository.getRecipesPaged(context, state.selectedCategory, 0)
                 }
 
                 val currentFavoriteIds = favoriteManager.favoriteIds.first()
@@ -214,18 +191,12 @@ class RecipeViewModel @Inject constructor(
     /**
      * Jalankan Komputasi TF-IDF & Cosine Similarity Skripsi
      */
-    /**
-     * Jalankan Komputasi TF-IDF & Cosine Similarity Skripsi
-     */
     fun executeCosineRecommendation(rawQuery: String) {
-        val currentState = _uiState.value
-        val activeMethod = currentState.selectedMethod
-
         _uiState.update { it.copy(isLoading = true, isAiSearchActive = true) }
 
         viewModelScope.launch(Dispatchers.Default) {
             try {
-                // 2. Pecah teks CSV kembali menjadi representasi elemen List bersih
+                // Pecah teks CSV kembali menjadi list elemen bahan pangan bersih
                 val ingredientsList = rawQuery.split(",")
                     .map { it.trim() }
                     .filter { it.isNotEmpty() }
@@ -235,45 +206,29 @@ class RecipeViewModel @Inject constructor(
                     return@launch
                 }
 
-                // 3. Jalankan perhitungan spasial vector jarak Cosine Similarity
+                // Jalankan perhitungan spasial vektor jarak Cosine Similarity
                 val aiRecommendations = recommendationSystem.getRecommendations(ingredientsList)
 
-                Log.d("Chefly_Debug", "Hasil Cosine sebelum filter metode mendeteksi total: ${aiRecommendations.size} resep.")
+                Log.d("Chefly_Debug", "Hasil Cosine mendeteksi total: ${aiRecommendations.size} resep.")
 
-                // 4. Tarik data ID favorit saat ini
                 val currentFavoriteIds = favoriteManager.favoriteIds.first()
 
-                // 5. Proses Mapping Dan Post-Filtering berdasarkan Metode Memasak
+                // Proses Mapping Objek Resep secara Utuh dari Room lokal
                 val finalAiResults = aiRecommendations.mapNotNull { aiResult ->
-                    // Tarik data objek resep utuh dari database Room via Repository
                     val fullRecipe = repository.getRecipeById(context, aiResult.recipeId.toString().trim())
 
                     if (fullRecipe != null) {
-                        // 🟢 LOGIKA POST-FILTERING METODE MEMASAK
-                        // Lolos jika user memilih "Semua", string kosong, atau jika cookingMethod dari database cocok dengan filter UI
-                        val isMethodMatch = activeMethod.isBlank() ||
-                                activeMethod.equals("Semua", ignoreCase = true) ||
-                                fullRecipe.cookingMethod?.equals(activeMethod, ignoreCase = true) == true
-
-                        if (isMethodMatch) {
-                            // Jika lolos filter, copy objek dan suntikkan skor kedekatan vektor serta status favoritnya
-                            fullRecipe.copy(
-                                isFavorite = currentFavoriteIds.contains(fullRecipe.id),
-                                similarity = aiResult.similarityScore
-                            )
-                        } else {
-                            // Jika metode memasak tidak cocok (misal resep kuah padahal filter tombol "Goreng"), eliminasi dari list
-                            null
-                        }
+                        // REVISI: Logika post-filtering berbasis metode memasak dihapus penuh
+                        fullRecipe.copy(
+                            isFavorite = currentFavoriteIds.contains(fullRecipe.id),
+                            similarity = aiResult.similarityScore
+                        )
                     } else {
                         Log.e("RecipeViewModel", "ID Resep #${aiResult.recipeId} ada di TF-IDF tapi tidak ditemukan di Room DB!")
                         null
                     }
                 }
 
-                Log.d("Chefly_Debug", "Hasil Cosine setelah dieksekusi Post-Filtering: ${finalAiResults.size} resep lolos.")
-
-                // 6. Update UI State secara utuh menggunakan Dispatchers utama (Main Thread otomatis via update)
                 _uiState.update {
                     it.copy(
                         recipes = finalAiResults,
@@ -283,7 +238,7 @@ class RecipeViewModel @Inject constructor(
                     )
                 }
             } catch (e: Exception) {
-                Log.e("RecipeViewModel", "Gagal menghitung matriks kecocokan AI dan Post-Filter: ${e.message}", e)
+                Log.e("RecipeViewModel", "Gagal menghitung matriks kecocokan AI: ${e.message}", e)
                 _uiState.update { it.copy(isLoading = false) }
             }
         }
@@ -291,7 +246,7 @@ class RecipeViewModel @Inject constructor(
 
     fun loadNextPage() {
         val state = _uiState.value
-        // Jika mode pencarian AI NMS-Free aktif, kunci mekanisme paging bawaan
+        // Jika mode pencarian AI aktif atau kueri terisi, kunci mekanisme pagination bawaan
         if (state.isAiSearchActive || state.isLoadMore || state.isEndReached || state.searchQuery.isNotEmpty()) return
 
         _uiState.update { it.copy(isLoadMore = true) }
@@ -299,10 +254,10 @@ class RecipeViewModel @Inject constructor(
         viewModelScope.launch(Dispatchers.IO) {
             try {
                 val nextPage = state.recipes.size / 30
+                // REVISI: Parameter method dihapus dari pemanggilan repositori paged
                 val newRecipes = repository.getRecipesPaged(
                     context = context,
                     category = state.selectedCategory,
-                    method = state.selectedMethod,
                     pageNumber = nextPage
                 )
 

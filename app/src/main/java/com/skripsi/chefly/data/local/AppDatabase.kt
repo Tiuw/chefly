@@ -33,7 +33,7 @@ abstract class AppDatabase : RoomDatabase() {
                     AppDatabase::class.java,
                     "chefly_production.db"
                 )
-                    .createFromAsset("database/recipes.db")
+                    .createFromAsset("database/recipesv2.db")
                     .addCallback(object : RoomDatabase.Callback() {
                         override fun onOpen(db: SupportSQLiteDatabase) {
                             super.onOpen(db)
