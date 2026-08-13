@@ -1,6 +1,5 @@
 package com.skripsi.chefly
 
-import android.net.Uri
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -31,7 +30,6 @@ import com.skripsi.chefly.ui.screens.splash.SplashScreen
 import com.skripsi.chefly.ui.theme.CheflyTheme
 import com.skripsi.chefly.ui.viewmodel.MainViewModel
 import com.skripsi.chefly.ui.viewmodel.RecipeDetailViewModel
-import com.skripsi.chefly.ui.viewmodel.RecipeViewModel
 import dagger.hilt.android.AndroidEntryPoint
 
 @AndroidEntryPoint
@@ -97,7 +95,6 @@ fun MainScreen(
                         }
                     },
                     onRecipeClick = { id ->
-                        // 🟢 Gunakan format replace agar ID masuk sebagai Path Parameter utama
                         navController.navigate(
                             "${Screen.RecipeDetail.route.replace("{recipeId}", id)}?query=&similarity=0"
                         )
@@ -120,8 +117,8 @@ fun MainScreen(
                     },
                     onNavigateToResult = { selectedIngredients ->
                         val ingredientsCsv = selectedIngredients.joinToString(",")
-                        // 🟢 DIREVISI: Langsung lempar ke Screen Resep bawaan membawa data CSV
-                        navController.navigate("${Screen.Resep.route}?query=$ingredientsCsv") {
+                        // Navigasi khusus ke RecommendationScreen
+                        navController.navigate("${Screen.Rekomendasi.route}?ingredients=$ingredientsCsv") {
                             popUpTo(Screen.Beranda.route)
                         }
                     }
@@ -134,15 +131,37 @@ fun MainScreen(
                     onBackClick = { navController.popBackStack() },
                     onNavigateToResult = { selectedIngredients ->
                         val ingredientsCsv = selectedIngredients.joinToString(",")
-                        // 🟢 DIREVISI: Langsung lempar ke Screen Resep membawa data CSV (Mengganti pemicu crash)
-                        navController.navigate("${Screen.Resep.route}?query=$ingredientsCsv") {
+                        // Navigasi khusus ke RecommendationScreen
+                        navController.navigate("${Screen.Rekomendasi.route}?ingredients=$ingredientsCsv") {
                             popUpTo(Screen.Beranda.route) { saveState = false }
                         }
                     }
                 )
             }
 
-            // --- All Recipes Screen (Explore) ---
+            // --- Recommendation Screen (Khusus Hasil TF-IDF & Cosine Similarity) ---
+            composable(
+                route = "${Screen.Rekomendasi.route}?ingredients={ingredients}",
+                arguments = listOf(navArgument("ingredients") {
+                    type = NavType.StringType
+                    nullable = true
+                    defaultValue = ""
+                })
+            ) { backStackEntry ->
+                val ingredients = backStackEntry.arguments?.getString("ingredients") ?: ""
+                RecommendationScreen(
+                    ingredients = ingredients,
+                    onBackClick = { navController.popBackStack() },
+                    onAddMoreClick = { navController.navigate(Screen.TambahBahan.route) },
+                    onRecipeClick = { id, score ->
+                        navController.navigate(
+                            "${Screen.RecipeDetail.route.replace("{recipeId}", id)}?query=$ingredients&similarity=$score"
+                        )
+                    }
+                )
+            }
+
+            // --- All Recipes Screen (Khusus Pencarian Judul Standar Room DB) ---
             composable(
                 route = "${Screen.Resep.route}?query={query}",
                 arguments = listOf(navArgument("query") {
@@ -155,9 +174,7 @@ fun MainScreen(
 
                 RecipeScreen(
                     initialQuery = argumentQuery,
-                    // --- Di dalam Resep/Explore (MainActivity.kt) ---
                     onRecipeClick = { id, score ->
-                        // 🟢 Menyuntikkan ID, Query Bahan, dan Skor Vektor Cosine secara utuh
                         navController.navigate(
                             "${Screen.RecipeDetail.route.replace("{recipeId}", id)}?query=$argumentQuery&similarity=$score"
                         )
@@ -171,7 +188,6 @@ fun MainScreen(
             // --- Saved Recipes Screen ---
             composable(Screen.Tersimpan.route) {
                 SavedScreen(
-                    // --- Di dalam Tersimpan (MainActivity.kt) ---
                     onRecipeClick = { id ->
                         navController.navigate(
                             "${Screen.RecipeDetail.route.replace("{recipeId}", id)}?query=&similarity=0"
@@ -188,9 +204,7 @@ fun MainScreen(
             }
 
             // --- Recipe Detail Screen ---
-            // --- Deklarasi Komponen Detail di MainActivity.kt ---
             composable(
-                // 🟢 Pastikan polanya diawali dengan /{recipeId} baru diikuti oleh ?query dan &similarity
                 route = "${Screen.RecipeDetail.route}?query={query}&similarity={similarity}",
                 arguments = listOf(
                     navArgument("recipeId") { type = NavType.StringType },
@@ -213,7 +227,7 @@ fun MainScreen(
                 )
             }
 
-            // --- Onboarding ---
+            // --- Onboarding Screen ---
             composable(Screen.Onboarding.route) {
                 OnboardingScreen(onFinish = {
                     mainViewModel.completeOnboarding()

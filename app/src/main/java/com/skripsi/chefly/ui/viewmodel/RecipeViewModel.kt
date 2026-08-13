@@ -1,83 +1,77 @@
 package com.skripsi.chefly.ui.viewmodel
 
 import android.app.Application
-import android.util.Log
-import androidx.lifecycle.viewModelScope
-import dagger.hilt.android.lifecycle.HiltViewModel
-import kotlinx.coroutines.FlowPreview
-import kotlinx.coroutines.flow.*
-import kotlinx.coroutines.launch
-import javax.inject.Inject
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.lifecycle.AndroidViewModel
+import androidx.lifecycle.viewModelScope
 import com.skripsi.chefly.data.Recipe
 import com.skripsi.chefly.data.repository.RecipeRepository
-import com.skripsi.chefly.util.RecipeRecommendationSystem
+import com.skripsi.chefly.util.FavoriteManager
+import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.FlowPreview
+import kotlinx.coroutines.flow.*
+import kotlinx.coroutines.launch
+import javax.inject.Inject
+
+data class CategoryData(
+    val name: String,
+    val icon: ImageVector,
+    val isActive: Boolean = false
+)
 
 data class RecipeUIState(
     val isLoading: Boolean = false,
     val isLoadMore: Boolean = false,
     val recipes: List<Recipe> = emptyList(),
     val categories: List<CategoryData> = emptyList(),
-    val selectedCategory: String = "",
+    val selectedCategory: String = "Semua",
     val searchQuery: String = "",
-    val currentOffset: Int = 0,
     val isEndReached: Boolean = false,
-    val errorMessage: String? = null,
-    val isAiSearchActive: Boolean = false,
-    val isFromAiScanner: Boolean = false
-)
-
-data class CategoryData(
-    val name: String,
-    val icon: ImageVector,
-    val isActive: Boolean
+    val currentPage: Int = 0
 )
 
 @OptIn(FlowPreview::class)
 @HiltViewModel
 class RecipeViewModel @Inject constructor(
     private val repository: RecipeRepository,
-    private val recommendationSystem: RecipeRecommendationSystem, // Sistem rekomendasi TF-IDF & Cosine Similarity
     application: Application
 ) : AndroidViewModel(application) {
 
     private val context = application.applicationContext
-    private val favoriteManager = com.skripsi.chefly.util.FavoriteManager(context)
+    private val favoriteManager = FavoriteManager(context)
+
     private val _uiState = MutableStateFlow(RecipeUIState())
-    val uiState = _uiState.asStateFlow()
+    val uiState: StateFlow<RecipeUIState> = _uiState.asStateFlow()
 
-    fun disableLoadingPlaceholder() {
-        _uiState.update { it.copy(isLoading = false) }
-    }
-
-    private val defaultCategories = listOf(
-        CategoryData("Semua", Icons.Default.AllInclusive, true),
-        CategoryData("Ayam", Icons.Default.Restaurant, false),
-        CategoryData("Sapi", Icons.Default.DinnerDining, false),
-        CategoryData("Telur", Icons.Default.EggAlt, false),
-        CategoryData("Tahu", Icons.Default.BakeryDining, false),
-        CategoryData("Tempe", Icons.Default.BreakfastDining, false),
-        CategoryData("Ikan", Icons.Default.SetMeal, false)
-    )
-
-    private val _searchQuery = MutableStateFlow("")
+    private val _searchQueryInternal = MutableStateFlow("")
 
     init {
-        _uiState.update { it.copy(categories = defaultCategories, selectedCategory = "Semua") }
+        initializeCategories()
         fetchFilteredRecipes()
-
-        viewModelScope.launch {
-            _searchQuery
-                .debounce(500)
-                .distinctUntilChanged()
-                .collect { performSearch(it) }
-        }
-
         observeFavorites()
+
+        // Debounce agar query SQL tidak dipanggil beruntun saat mengetik cepat
+        viewModelScope.launch {
+            _searchQueryInternal
+                .debounce(300)
+                .distinctUntilChanged()
+                .collect { performSearch() }
+        }
+    }
+
+    private fun initializeCategories() {
+        val defaultCategories = listOf(
+            CategoryData("Semua", Icons.Default.AllInclusive, true),
+            CategoryData("Ayam", Icons.Default.Restaurant),
+            CategoryData("Daging", Icons.Default.SetMeal),
+            CategoryData("Ikan", Icons.Default.Sailing),
+            CategoryData("Sayur", Icons.Default.Eco),
+            CategoryData("Sambal", Icons.Default.Whatshot)
+        )
+        _uiState.update { it.copy(categories = defaultCategories) }
     }
 
     private fun observeFavorites() {
@@ -94,84 +88,54 @@ class RecipeViewModel @Inject constructor(
         }
     }
 
-    fun toggleFavorite(recipe: Recipe) {
-        viewModelScope.launch {
-            favoriteManager.toggleFavorite(recipe.id)
-        }
-    }
-
     fun onSearchQueryChanged(query: String) {
-        _uiState.update { it.copy(searchQuery = query) }
-
-        if (!query.contains(",")) {
-            _uiState.update { it.copy(isFromAiScanner = false) }
-        }
-        _searchQuery.value = query
-    }
-
-    fun triggerAiScannerInput(csvQuery: String) {
         _uiState.update {
             it.copy(
-                searchQuery = csvQuery,
-                isFromAiScanner = true
+                searchQuery = query,
+                recipes = emptyList(),
+                currentPage = 0,
+                isEndReached = false
             )
         }
-        _searchQuery.value = csvQuery
-    }
-
-    private fun performSearch(query: String) {
-        fetchFilteredRecipes()
+        _searchQueryInternal.value = query
     }
 
     fun onCategorySelected(categoryName: String) {
         val updatedCategories = _uiState.value.categories.map {
             it.copy(isActive = it.name == categoryName)
         }
-
         _uiState.update {
             it.copy(
-                categories = updatedCategories,
                 selectedCategory = categoryName,
+                categories = updatedCategories,
                 searchQuery = "",
                 recipes = emptyList(),
-                currentOffset = 0,
-                isEndReached = false,
-                isLoading = true,
-                isAiSearchActive = false
+                currentPage = 0,
+                isEndReached = false
             )
         }
-        _searchQuery.value = ""
+        _searchQueryInternal.value = ""
         fetchFilteredRecipes()
     }
 
-    // LOGIKA UTAMA: Menggabungkan Filter Kategori dengan Sistem Perangkingan Cosine Similarity
-    private fun fetchFilteredRecipes() {
-        val state = _uiState.value
-        val isAiInput = state.searchQuery.contains(",")
-
-        if (isAiInput) {
-            executeCosineRecommendation(state.searchQuery)
-        } else {
-            executeStandardTextSearch(state)
-        }
+    private fun performSearch() {
+        fetchFilteredRecipes()
     }
 
-    /**
-     * Jalankan filter teks SQL standard bawaan Room DB
-     */
-    private fun executeStandardTextSearch(state: RecipeUIState) {
-        _uiState.update { it.copy(isLoading = true, isAiSearchActive = false) }
+    private fun fetchFilteredRecipes() {
+        val state = _uiState.value
+        _uiState.update { it.copy(isLoading = true) }
+
         viewModelScope.launch(Dispatchers.IO) {
             try {
-                // REVISI: Parameter method dihapus dari pemanggilan repositori
-                val rawResults = if (state.searchQuery.isNotBlank()) {
-                    repository.searchRecipesWithFilters(context, state.searchQuery, state.selectedCategory)
-                } else {
+                val results = if (state.searchQuery.isBlank()) {
                     repository.getRecipesPaged(context, state.selectedCategory, 0)
+                } else {
+                    repository.searchRecipesWithFilters(context, state.searchQuery, state.selectedCategory)
                 }
 
                 val currentFavoriteIds = favoriteManager.favoriteIds.first()
-                val finalResults = rawResults.map { recipe ->
+                val finalResults = results.map { recipe ->
                     recipe.copy(isFavorite = currentFavoriteIds.contains(recipe.id))
                 }
 
@@ -188,92 +152,41 @@ class RecipeViewModel @Inject constructor(
         }
     }
 
-    /**
-     * Jalankan Komputasi TF-IDF & Cosine Similarity Skripsi
-     */
-    fun executeCosineRecommendation(rawQuery: String) {
-        _uiState.update { it.copy(isLoading = true, isAiSearchActive = true) }
-
-        viewModelScope.launch(Dispatchers.Default) {
-            try {
-                // Pecah teks CSV kembali menjadi list elemen bahan pangan bersih
-                val ingredientsList = rawQuery.split(",")
-                    .map { it.trim() }
-                    .filter { it.isNotEmpty() }
-
-                if (ingredientsList.isEmpty()) {
-                    _uiState.update { it.copy(isLoading = false, recipes = emptyList(), isAiSearchActive = false) }
-                    return@launch
-                }
-
-                // Jalankan perhitungan spasial vektor jarak Cosine Similarity
-                val aiRecommendations = recommendationSystem.getRecommendations(ingredientsList)
-
-                Log.d("Chefly_Debug", "Hasil Cosine mendeteksi total: ${aiRecommendations.size} resep.")
-
-                val currentFavoriteIds = favoriteManager.favoriteIds.first()
-
-                // Proses Mapping Objek Resep secara Utuh dari Room lokal
-                val finalAiResults = aiRecommendations.mapNotNull { aiResult ->
-                    val fullRecipe = repository.getRecipeById(context, aiResult.recipeId.toString().trim())
-
-                    if (fullRecipe != null) {
-                        // REVISI: Logika post-filtering berbasis metode memasak dihapus penuh
-                        fullRecipe.copy(
-                            isFavorite = currentFavoriteIds.contains(fullRecipe.id),
-                            similarity = aiResult.similarityScore
-                        )
-                    } else {
-                        Log.e("RecipeViewModel", "ID Resep #${aiResult.recipeId} ada di TF-IDF tapi tidak ditemukan di Room DB!")
-                        null
-                    }
-                }
-
-                _uiState.update {
-                    it.copy(
-                        recipes = finalAiResults,
-                        isLoading = false,
-                        isEndReached = true,
-                        isFromAiScanner = false
-                    )
-                }
-            } catch (e: Exception) {
-                Log.e("RecipeViewModel", "Gagal menghitung matriks kecocokan AI: ${e.message}", e)
-                _uiState.update { it.copy(isLoading = false) }
-            }
-        }
-    }
-
     fun loadNextPage() {
         val state = _uiState.value
-        // Jika mode pencarian AI aktif atau kueri terisi, kunci mekanisme pagination bawaan
-        if (state.isAiSearchActive || state.isLoadMore || state.isEndReached || state.searchQuery.isNotEmpty()) return
+        if (state.isLoading || state.isLoadMore || state.isEndReached || state.searchQuery.isNotBlank()) return
 
         _uiState.update { it.copy(isLoadMore = true) }
+        val nextPage = state.currentPage + 1
 
         viewModelScope.launch(Dispatchers.IO) {
             try {
-                val nextPage = state.recipes.size / 30
-                // REVISI: Parameter method dihapus dari pemanggilan repositori paged
-                val newRecipes = repository.getRecipesPaged(
-                    context = context,
-                    category = state.selectedCategory,
-                    pageNumber = nextPage
-                )
+                val results = repository.getRecipesPaged(context, state.selectedCategory, nextPage)
+                val currentFavoriteIds = favoriteManager.favoriteIds.first()
+                val finalResults = results.map { recipe ->
+                    recipe.copy(isFavorite = currentFavoriteIds.contains(recipe.id))
+                }
 
-                if (newRecipes.isEmpty()) {
+                if (finalResults.isEmpty()) {
                     _uiState.update { it.copy(isEndReached = true, isLoadMore = false) }
                 } else {
                     _uiState.update {
                         it.copy(
-                            recipes = it.recipes + newRecipes,
-                            isLoadMore = false
+                            recipes = it.recipes + finalResults,
+                            isLoadMore = false,
+                            currentPage = nextPage
                         )
                     }
                 }
             } catch (e: Exception) {
                 _uiState.update { it.copy(isLoadMore = false) }
             }
+        }
+    }
+
+    fun toggleFavorite(recipe: Recipe) {
+        viewModelScope.launch {
+            favoriteManager.toggleFavorite(recipe.id)
         }
     }
 }

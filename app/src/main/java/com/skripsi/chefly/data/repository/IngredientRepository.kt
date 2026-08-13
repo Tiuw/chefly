@@ -15,9 +15,13 @@ import javax.inject.Singleton
 @Singleton
 class IngredientRepository @Inject constructor() {
 
-    // State untuk menampung hasil deteksi kamera (Tetap dipertahankan untuk fitur YOLO)
+    // State untuk menampung hasil deteksi kamera (Fitur YOLO)
     private val _detectedIngredientsFromCamera = MutableStateFlow<Set<String>>(emptySet())
     val detectedIngredientsFromCamera: StateFlow<Set<String>> = _detectedIngredientsFromCamera.asStateFlow()
+
+    // State untuk menampung daftar bahan yang sedang aktif pada sistem rekomendasi TF-IDF & Cosine Similarity
+    private val _currentRecommendationIngredients = MutableStateFlow<Set<String>>(emptySet())
+    val currentRecommendationIngredients: StateFlow<Set<String>> = _currentRecommendationIngredients.asStateFlow()
 
     fun saveDetectedIngredients(ingredients: List<String>) {
         _detectedIngredientsFromCamera.value = ingredients.map { it.trim().lowercase() }.toSet()
@@ -27,19 +31,84 @@ class IngredientRepository @Inject constructor() {
         _detectedIngredientsFromCamera.value = emptySet()
     }
 
+    fun setCurrentRecommendationIngredients(ingredients: List<String>) {
+        _currentRecommendationIngredients.value = ingredients.map { it.trim() }.toSet()
+    }
+
+    fun removeRecommendationIngredient(ingredient: String) {
+        _currentRecommendationIngredients.value = _currentRecommendationIngredients.value - ingredient
+    }
+
     /**
      * MENGAMBIL DATA LANGSUNG DARI LIST STATIS (INSTANT LOAD)
      */
     fun getCategorizedIngredients(): List<IngredientGroup> {
 
-        // 1. Definisikan Keywords sesuai permintaan Anda
+        // 1. Definisikan Keywords kelompok bahan pangan
         val keywords = mapOf(
-            "Protein" to listOf("Daging", "Ayam", "Sapi", "Kambing", "Ikan", "Udang", "Telur", "Tempe", "Tahu", "Bakso", "Sosis"),
-            "Bumbu & Cabe" to listOf("Bawang", "Cabe", "Cabai", "Sambal", "Kemiri", "Terasi", "Jahe", "Kunyit", "Lengkuas", "Serai", "Garam", "Gula"),
-            "Rempah" to listOf("Ketumbar", "Merica", "Lada", "Pala", "Kapulaga", "Kayu manis", "Cengkeh", "Jinten", "Asam jawa"),
-            "Sayuran" to listOf("Tomat", "Kubis", "Kol", "Wortel", "Kentang", "Kacang", "Kangkung", "Seledri", "Sawi", "Bayam", "Jagung"),
+            "Protein" to listOf(
+                "Daging",
+                "Ayam",
+                "Sapi",
+                "Kambing",
+                "Ikan",
+                "Udang",
+                "Telur",
+                "Tempe",
+                "Tahu",
+                "Bakso",
+                "Sosis"
+            ),
+            "Bumbu & Cabe" to listOf(
+                "Bawang",
+                "Cabe",
+                "Cabai",
+                "Sambal",
+                "Kemiri",
+                "Terasi",
+                "Jahe",
+                "Kunyit",
+                "Lengkuas",
+                "Serai",
+                "Garam",
+                "Gula"
+            ),
+            "Rempah" to listOf(
+                "Ketumbar",
+                "Merica",
+                "Lada",
+                "Pala",
+                "Kapulaga",
+                "Kayu manis",
+                "Cengkeh",
+                "Jinten",
+                "Asam jawa"
+            ),
+            "Sayuran" to listOf(
+                "Tomat",
+                "Kubis",
+                "Kol",
+                "Wortel",
+                "Kentang",
+                "Kacang",
+                "Kangkung",
+                "Seledri",
+                "Sawi",
+                "Bayam",
+                "Jagung"
+            ),
             "Dedaunan" to listOf("Daun", "Nipis", "Pandan", "Kemangi"),
-            "Tepung & Lainnya" to listOf("Tepung", "Minyak", "Mentega", "Santan", "Kelapa", "Susu", "Keju", "Mie", "Pasta")
+            "Tepung & Lainnya" to listOf(
+                "Tepung",
+                "Minyak",
+                "Mentega",
+                "Santan",
+                "Kelapa",
+                "Susu",
+                "Keju",
+                "Mie",
+                "Pasta"
+            )
         )
 
         // 2. Mapping ke UI Model dengan Ikon dan Warna
