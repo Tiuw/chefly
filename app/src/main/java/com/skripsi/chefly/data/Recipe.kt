@@ -13,35 +13,28 @@ data class Recipe(
     val similarity: Float = 0f,
     val isFavorite: Boolean = false
 ) {
+
     /**
      * PARSER OTOMATIS UNTUK BAHAN (INGREDIENTS)
-     * Mengubah string mentah database menjadi List<String> siap pakai di UI
      */
     val ingredientList: List<String> get() {
         val trimmed = ingredients.trim()
         if (trimmed.isBlank()) return emptyList()
 
         return when {
-            // Jalur 1: Jika data berformat Raw JSON Array -> ["Bahan 1", "Bahan 2"]
+            // Jalur 1: Menggunakan Regex untuk memotong sekat JSON array [ "item1", "item2" ]
             trimmed.startsWith("[") && trimmed.endsWith("]") -> {
                 trimmed
-                    .replace(Regex("^\\[\\s*\"|\"\\s*\\]$"), "") // Hapus [" di awal dan "] di akhir array
-                    .split("\",\"")                              // Potong HANYA pada sekat pembatas JSON asli
-                    .map { it.replace("\\", "").trim() }         // Bersihkan sisa escape character jika ada
-                    .filter { it.isNotBlank() && !it.startsWith("Bumbu") }
+                    .replace(Regex("""^\[\s*\"|\"\s*\]$"""), "") // Hapus [" di awal dan "] di akhir
+                    .split(Regex("""\"\s*,\s*\""""))             // Belah pada sekat "," dengan toleransi spasi
+                    .map { it.replace("\\", "").trim() }
+                    .filter { it.isNotBlank() && !it.lowercase().startsWith("bumbu") }
             }
-            // Jalur 2: Jika data berformat string biasa dipisah '--' -> Bahan 1--Bahan 2
-            trimmed.contains("--") -> {
-                trimmed
-                    .split("--")
-                    .map { it.trim() }
-                    .filter { it.isNotBlank() && !it.startsWith("Bumbu") }
-            }
-            // Jalur 3: Fallback split koma biasa jika tidak memenuhi kondisi di atas
+            // Jalur 2: Fallback split koma biasa
             else -> {
                 trimmed
                     .split(",")
-                    .map { it.trim() }
+                    .map { it.trim().replace("\"", "") } // Hapus kutip yang tersisa
                     .filter { it.isNotBlank() }
             }
         }
@@ -49,34 +42,39 @@ data class Recipe(
 
     /**
      * PARSER OTOMATIS UNTUK LANGKAH (STEPS)
-     * Memotong baris tanpa merusak tanda koma di dalam kalimat instruksi
      */
     val stepList: List<String> get() {
         val trimmed = steps.trim()
         if (trimmed.isBlank()) return emptyList()
 
+        // 1. Ekstrak string mentah dari bungkus JSON array jika ada
+        val cleanRawString = if (trimmed.startsWith("[") && trimmed.endsWith("]")) {
+            trimmed.replace(Regex("""^\[\s*\"|\"\s*\]$"""), "")
+        } else {
+            trimmed
+        }
+
+        // 2. Strategi Pemecahan (Splitting) menggunakan Regex yang lebih agresif
         val rawSteps = when {
-            // Jalur 1: Jika instruksi berformat Raw JSON Array -> ["1) ...", "2) ..."]
-            trimmed.startsWith("[") && trimmed.endsWith("]") -> {
-                trimmed
-                    .replace(Regex("^\\[\\s*\"|\"\\s*\\]$"), "") // Hapus [" di awal dan "] di akhir
-                    .split("\",\"")                              // Belah murni pada pembatas objek array JSON
-                    .map { it.replace("\\", "").trim() }
+            // Jika ada sekat JSON murni " , " atau ","
+            cleanRawString.contains("\",\"") || cleanRawString.contains("\", \"") -> {
+                cleanRawString.split(Regex("""\"\s*,\s*\""""))
             }
-            // Jalur 2: Jika instruksi dipisah oleh escape karakter baris baru (\n)
-            trimmed.contains("\n") -> {
-                trimmed.split("\n").map { it.trim() }
+            // Jika data menggumpal tapi dipisahkan penomoran internal seperti "2) ", "3) "
+            cleanRawString.contains(Regex("""\d+[\)\.]\s""")) -> {
+                cleanRawString.split(Regex("""\s*,\s*\"\s*\d+[\)\.]\s*|\s*\"\s*,\s*\"\s*|\s*\d+[\)\.]\s*"""))
             }
-            // Jalur 3: Fallback split koma biasa
+            // Fallback split koma biasa
             else -> {
-                trimmed.split(",").map { it.trim() }
+                cleanRawString.split(",")
             }
         }
 
-        // Lakukan pembersihan teks akhir dari penomoran ganda sebelum dilempar ke Compose
+        // 3. Bersihkan sisa-sisa karakter kotor dan penomoran ganda
         return rawSteps
-            .filter { it.isNotBlank() }
+            .map { it.replace("\\", "").replace("\"", "").trim() }
             .map { cleanStepNumbering(it) }
+            .filter { it.isNotBlank() && it.length > 3 }
     }
 
     /**
