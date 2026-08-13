@@ -77,6 +77,23 @@ interface RecipeDao {
     @Query("SELECT * FROM recipes WHERE id = :id LIMIT 1")
     suspend fun getById(id: String): RecipeEntity?
 
+    @Query("SELECT DISTINCT category FROM recipes WHERE category IS NOT NULL AND category != '' ORDER BY category ASC")
+    suspend fun getUniqueCategories(): List<String>
+
+    @Query("""
+    SELECT * FROM recipes 
+    WHERE LOWER(title) LIKE '%' || LOWER(:query) || '%' 
+    AND LOWER(category) LIKE '%' || LOWER(:category) || '%'
+    ORDER BY loves DESC, id DESC 
+    LIMIT :limit OFFSET :offset
+""")
+    suspend fun searchByTitleAndCategoryPaginated(
+        query: String,
+        category: String,
+        limit: Int,
+        offset: Int
+    ): List<RecipeEntity>
+
 
     // --- Query untuk Tabel tfidf_data ---
 

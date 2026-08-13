@@ -222,14 +222,15 @@ fun ExploreTopBar() {
     )
 }
 
+
 @Composable
 fun SearchBarSection(query: String, onQueryChange: (String) -> Unit) {
     OutlinedTextField(
         value = query,
         onValueChange = onQueryChange,
         modifier = Modifier.fillMaxWidth(),
-        placeholder = { Text("Cari judul resep...", color = MutedSlate) },
-        leadingIcon = { Icon(Icons.Default.Search, null, tint = MutedSlate) },
+        placeholder = { Text("Cari judul resep...", color = Color.Gray) }, // 🟢 Perubahan Placeholder
+        leadingIcon = { Icon(Icons.Default.Search, null, tint = Color.Gray) },
         shape = RoundedCornerShape(12.dp),
         singleLine = true,
         keyboardOptions = KeyboardOptions(autoCorrect = false, imeAction = ImeAction.Search),

@@ -256,4 +256,30 @@ class RecipeRepository @Inject constructor(
     private fun normalizeIngredientTokens(items: List<String>): Set<String> {
         return items.flatMap { splitAndNormalizeIngredient(it) }.filter { it.isNotBlank() }.toSet()
     }
+
+    suspend fun getUniqueCategories(context: Context): List<String> = withContext(Dispatchers.IO) {
+        try {
+            getDao(context).getUniqueCategories()
+        } catch (e: Exception) {
+            Log.e("RecipeRepository", "Error fetching unique categories: ${e.message}")
+            emptyList()
+        }
+    }
+
+    suspend fun searchRecipesByTitle(
+        context: Context,
+        query: String,
+        category: String,
+        page: Int
+    ): List<Recipe> = withContext(Dispatchers.IO) {
+        try {
+            val offset = page * 30 // PAGE_SIZE
+            val categoryQuery = if (category == "Semua") "%" else category
+            val entities = getDao(context).searchByTitleAndCategoryPaginated(query, categoryQuery, 30, offset)
+            entities.map { it.toDomain() }
+        } catch (e: Exception) {
+            Log.e("RecipeRepository", "Error searching recipes by title: ${e.message}")
+            emptyList()
+        }
+    }
 }

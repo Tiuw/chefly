@@ -63,7 +63,7 @@ class IngredientRepository @Inject constructor() {
                 "Bawang",
                 "Cabe",
                 "Cabai",
-                "Sambal",
+                "FSambal",
                 "Kemiri",
                 "Terasi",
                 "Jahe",
