@@ -158,6 +158,7 @@ class YOLO26Detector(
             isProcessing = false
         }
     }
+    //
 
     fun close() {
         interpreter?.close()
