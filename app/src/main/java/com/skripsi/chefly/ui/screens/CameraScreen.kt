@@ -146,7 +146,11 @@ fun CameraScreen(
         sheetContent = {
             DetectedIngredientsSheetContentContent(
                 detectedItems = imageDetections,
-                onAddMoreClick = onAddMoreClick,
+                onAddMoreClick = {
+                    // 🟢 Simpan hasil deteksi ke repository sebelum navigasi ke tambah bahan
+                    viewModel.saveCurrentDetectionsToRepository()
+                    onAddMoreClick()
+                },
                 onSearchRecipesClick = { selectedList ->
                     viewModel.saveCurrentDetectionsToRepository()
                     val dbKeys = selectedList.map { it.toDatabaseKey() }

@@ -117,8 +117,16 @@ class CameraViewModel @Inject constructor(
 
     fun saveCurrentDetectionsToRepository() {
         val currentLabels = _imageDetections.value.map { it.label }.distinct()
+
+        // 🟢 Format label agar sinkron dengan display name di AddIngredientScreen
+        // Contoh: "ayam" -> "Ayam", "daging_sapi" -> "Daging sapi"
+        val formattedLabels = currentLabels.map { name ->
+            name.replace("_", " ").replaceFirstChar { it.uppercase() }
+        }
+
         ingredientRepository.saveDetectedIngredients(currentLabels)
-        // Tambahkan ke sistem rekomendasi aktif
-        ingredientRepository.setCurrentRecommendationIngredients(currentLabels)
+
+        // 🟢 Simpan label yang sudah rapi ke sistem rekomendasi aktif
+        ingredientRepository.setCurrentRecommendationIngredients(formattedLabels)
     }
 }

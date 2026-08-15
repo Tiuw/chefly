@@ -28,8 +28,10 @@ import com.skripsi.chefly.ui.screens.*
 import com.skripsi.chefly.ui.screens.onboarding.OnboardingScreen
 import com.skripsi.chefly.ui.screens.splash.SplashScreen
 import com.skripsi.chefly.ui.theme.CheflyTheme
+import com.skripsi.chefly.ui.viewmodel.AddIngredientViewModel
 import com.skripsi.chefly.ui.viewmodel.MainViewModel
 import com.skripsi.chefly.ui.viewmodel.RecipeDetailViewModel
+import com.skripsi.chefly.util.toDatabaseKey
 import dagger.hilt.android.AndroidEntryPoint
 
 @AndroidEntryPoint
@@ -116,25 +118,28 @@ fun MainScreen(
                         navController.navigate(Screen.TambahBahan.route)
                     },
                     onNavigateToResult = { selectedIngredients ->
-                        val ingredientsCsv = selectedIngredients.joinToString(",")
-                        // Navigasi khusus ke RecommendationScreen
-                        navController.navigate("${Screen.Rekomendasi.route}?ingredients=$ingredientsCsv") {
-                            popUpTo(Screen.Beranda.route)
-                        }
+                        // 🟢 Map ke Database Key sebelum dikirim ke Recommendation
+                        val dbKeys = selectedIngredients.map { it.toDatabaseKey() }
+                        val ingredientsCsv = dbKeys.joinToString(",")
+                        navController.navigate("${Screen.Rekomendasi.route}?ingredients=$ingredientsCsv")
                     }
                 )
             }
 
             // --- Add Ingredient Screen ---
             composable(Screen.TambahBahan.route) {
+                val viewModel: AddIngredientViewModel = hiltViewModel()
+
                 AddIngredientScreen(
+                    viewModel = viewModel,
                     onBackClick = { navController.popBackStack() },
                     onNavigateToResult = { selectedIngredients ->
+                        // 🟢 Simpan state agar saat balik (Edit), centang tidak hilang
+                        viewModel.saveToRepository()
+
+                        // Kirim CSV asli (Ayam, Sapi), ViewModel yang akan me-mapping
                         val ingredientsCsv = selectedIngredients.joinToString(",")
-                        // Navigasi khusus ke RecommendationScreen
-                        navController.navigate("${Screen.Rekomendasi.route}?ingredients=$ingredientsCsv") {
-                            popUpTo(Screen.Beranda.route) { saveState = false }
-                        }
+                        navController.navigate("${Screen.Rekomendasi.route}?ingredients=$ingredientsCsv")
                     }
                 )
             }

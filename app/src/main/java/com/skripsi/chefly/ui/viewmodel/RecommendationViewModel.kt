@@ -8,6 +8,7 @@ import com.skripsi.chefly.data.repository.IngredientRepository
 import com.skripsi.chefly.data.repository.RecipeRepository
 import com.skripsi.chefly.util.FavoriteManager
 import com.skripsi.chefly.util.RecipeRecommendationSystem
+import com.skripsi.chefly.util.toDatabaseKey
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.*
@@ -25,7 +26,7 @@ data class RecommendationUIState(
 @HiltViewModel
 class RecommendationViewModel @Inject constructor(
     private val repository: RecipeRepository,
-    private val ingredientRepository: IngredientRepository, // Inject IngredientRepository
+    private val ingredientRepository: IngredientRepository,
     private val recommendationSystem: RecipeRecommendationSystem,
     application: Application
 ) : AndroidViewModel(application) {
@@ -49,9 +50,16 @@ class RecommendationViewModel @Inject constructor(
         viewModelScope.launch {
             ingredientRepository.currentRecommendationIngredients.collect { ingredientsSet ->
                 val list = ingredientsSet.toList()
-                _uiState.update { it.copy(ingredients = list) }
                 if (list.isNotEmpty()) {
                     getRecommendations(list.joinToString(","))
+                } else {
+                    _uiState.update {
+                        it.copy(
+                            ingredients = emptyList(),
+                            recipes = emptyList(),
+                            ingredientsQuery = ""
+                        )
+                    }
                 }
             }
         }
@@ -80,13 +88,6 @@ class RecommendationViewModel @Inject constructor(
     fun getRecommendations(csvIngredients: String) {
         if (csvIngredients.isBlank()) return
 
-        // PREVENT RE-COMPUTATION: Abaikan jika query sama dan hasil resep sudah dimuat
-        val currentState = _uiState.value
-        if (currentState.ingredientsQuery == csvIngredients && currentState.recipes.isNotEmpty()) {
-            return
-        }
-
-        // Sinkronkan state repository agar komponen UI lain yang mengamati repository tetap konsisten
         val ingredientsList = csvIngredients.split(",")
             .map { it.trim() }
             .filter { it.isNotEmpty() }
@@ -96,21 +97,29 @@ class RecommendationViewModel @Inject constructor(
             return
         }
 
+        // 🟢 Pastikan dbIngredients dihitung di sini
+        val dbIngredients = ingredientsList.map { it.toDatabaseKey() }
+        val dbCsvForQuery = dbIngredients.joinToString(",")
+
+        val currentState = _uiState.value
+        if (currentState.ingredientsQuery == dbCsvForQuery && currentState.recipes.isNotEmpty()) {
+            return
+        }
+
         _uiState.update {
             it.copy(
                 isLoading = true,
-                ingredientsQuery = csvIngredients,
-                ingredients = ingredientsList
+                ingredientsQuery = dbCsvForQuery, // Simpan format DB (daging_sapi) untuk pencocokan di Card
+                ingredients = ingredientsList    // Simpan format Tampilan (Sapi) untuk Chips
             )
         }
 
         viewModelScope.launch(Dispatchers.Default) {
             try {
-                // 1. Hitung Perangkingan Cosine Similarity
-                val aiRecommendations = recommendationSystem.getRecommendations(ingredientsList)
+                // Gunakan dbIngredients untuk perhitungan AI
+                val aiRecommendations = recommendationSystem.getRecommendations(dbIngredients)
                 val currentFavorites = favoriteManager.favoriteIds.first()
 
-                // 2. Ambil data resep lengkap dari Room DB & pasang skor kemiripan
                 val finalResults = aiRecommendations.mapNotNull { result ->
                     val fullRecipe = repository.getRecipeById(context, result.recipeId.toString().trim())
                     fullRecipe?.copy(
@@ -122,14 +131,15 @@ class RecommendationViewModel @Inject constructor(
                 _uiState.update {
                     it.copy(
                         recipes = finalResults,
-                        isLoading = false
+                        isLoading = false,
+                        errorMessage = null
                     )
                 }
             } catch (e: Exception) {
                 _uiState.update {
                     it.copy(
                         isLoading = false,
-                        errorMessage = "Gagal memuat rekomendasi: ${e.message}"
+                        errorMessage = "Gagal memuat: ${e.message}"
                     )
                 }
             }
@@ -137,7 +147,7 @@ class RecommendationViewModel @Inject constructor(
     }
 
     /**
-     * Fungsi opsional untuk menghapus bahan dari daftar aktif secara langsung.
+     * Menghapus bahan dari daftar aktif secara langsung.
      */
     fun removeIngredient(ingredient: String) {
         ingredientRepository.removeRecommendationIngredient(ingredient)

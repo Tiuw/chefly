@@ -47,7 +47,6 @@ class IngredientRepository @Inject constructor() {
         // 1. Definisikan Keywords kelompok bahan pangan
         val keywords = mapOf(
             "Protein" to listOf(
-                "Daging",
                 "Ayam",
                 "Sapi",
                 "Kambing",

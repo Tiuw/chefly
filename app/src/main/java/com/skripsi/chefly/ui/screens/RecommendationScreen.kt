@@ -201,12 +201,14 @@ fun RecommendationRecipeCard(
     val ingredientAnalysis = remember(recipe, currentQuery) {
         val allRecipeIngredients = recipe.ingredientList
         if (currentQuery.isNotBlank()) {
-            val userTokens = currentQuery.split(Regex("[,\\s]+"))
-                .map { it.trim().lowercase().replace("_", "") }
+            // Normalisasi query (daging_ayam -> daging, ayam)
+            val userTokens = currentQuery.split(Regex("[,\\s_]+"))
+                .map { it.trim().lowercase() }
                 .filter { it.isNotEmpty() }
 
             val availableCount = allRecipeIngredients.count { ingredient ->
-                val cleaned = ingredient.lowercase().replace(" ", "")
+                // Normalisasi bahan resep (Daging Ayam -> dagingayam)
+                val cleaned = ingredient.lowercase().replace(" ", "").replace("_", "")
                 userTokens.any { token -> cleaned.contains(token) }
             }
             Pair(availableCount, allRecipeIngredients.size - availableCount)

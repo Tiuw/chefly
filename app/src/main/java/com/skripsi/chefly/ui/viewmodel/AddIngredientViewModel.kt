@@ -87,6 +87,8 @@ class AddIngredientViewModel @Inject constructor(
     init {
         loadIngredientsFromRepository()
         observeCameraDetections()
+        // 🟢 Tambahkan sinkronisasi state di sini
+        restoreSelectedIngredients()
     }
 
     /**
@@ -113,17 +115,38 @@ class AddIngredientViewModel @Inject constructor(
         viewModelScope.launch {
             ingredientRepository.detectedIngredientsFromCamera.collect { cameraIngredients ->
                 if (cameraIngredients.isNotEmpty()) {
-                    // Format nama bahan agar rapi (misal: "ayam_goreng" -> "Ayam goreng")
                     val formatted = cameraIngredients.map { name ->
+                        // Pastikan format sama: "ayam" -> "Ayam"
                         name.replace("_", " ").replaceFirstChar { it.uppercase() }
                     }
+                    // Gabungkan dengan yang sudah dipilih sebelumnya
                     _selectedIngredients.value = _selectedIngredients.value + formatted
 
-                    // Bersihkan cache di repo setelah diambil
+                    // Bersihkan cache deteksi agar tidak terpanggil berulang kali
                     ingredientRepository.clearDetectedIngredients()
                 }
             }
         }
+    }
+
+    /**
+     * Memulihkan bahan yang sedang aktif di sistem rekomendasi global
+     */
+    private fun restoreSelectedIngredients() {
+        viewModelScope.launch {
+            // Ambil bahan yang sedang aktif di sistem rekomendasi
+            val activeIngredients = ingredientRepository.currentRecommendationIngredients.value
+            if (activeIngredients.isNotEmpty()) {
+                _selectedIngredients.value = activeIngredients.toSet()
+            }
+        }
+    }
+
+    /**
+     * Simpan state pilihan ke repository sebelum navigasi
+     */
+    fun saveToRepository() {
+        ingredientRepository.setCurrentRecommendationIngredients(_selectedIngredients.value.toList())
     }
 
     /**

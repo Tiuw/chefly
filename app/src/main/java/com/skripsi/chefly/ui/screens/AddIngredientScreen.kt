@@ -56,7 +56,11 @@ fun AddIngredientScreen(
         bottomBar = {
             ActionBottomBar(
                 count = selectedIngredients.size,
-                onClick = { onNavigateToResult(selectedIngredients.toList()) }
+                onClick = {
+                    // 🟢 SIMPAN ke Repository agar data tidak hilang saat balik lagi
+                    viewModel.saveToRepository()
+                    onNavigateToResult(selectedIngredients.toList())
+                }
             )
         }
     ) { padding ->
