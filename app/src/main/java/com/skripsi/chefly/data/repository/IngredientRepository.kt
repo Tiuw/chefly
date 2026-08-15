@@ -44,83 +44,116 @@ class IngredientRepository @Inject constructor() {
      */
     fun getCategorizedIngredients(): List<IngredientGroup> {
 
-        // 1. Definisikan Keywords kelompok bahan pangan
+        // 1. Definisikan Keywords kelompok bahan pangan lengkap
         val keywords = mapOf(
-            "Protein" to listOf(
-                "Ayam",
-                "Sapi",
-                "Kambing",
+            "Protein & Hewani" to listOf(
+                "Daging sapi",
+                "Daging ayam",
+                "Daging kambing",
                 "Ikan",
                 "Udang",
-                "Telur",
-                "Tempe",
-                "Tahu",
-                "Bakso",
-                "Sosis"
+                "Telur"
             ),
-            "Bumbu & Cabe" to listOf(
-                "Bawang",
-                "Cabe",
-                "Cabai",
-                "FSambal",
-                "Kemiri",
-                "Terasi",
-                "Jahe",
-                "Kunyit",
-                "Lengkuas",
-                "Serai",
-                "Garam",
-                "Gula"
+            "Cabai & Bawang" to listOf(
+                "Cabe merah",
+                "Cabe hijau",
+                "Cabe rawit",
+                "Bawang merah",
+                "Bawang putih",
+                "Bawang bombay",
+                "Daun bawang"
             ),
-            "Rempah" to listOf(
-                "Ketumbar",
-                "Merica",
-                "Lada",
+            "Daun & Rempah" to listOf(
+                "Daun jeruk",
+                "Daun salam",
+                "Daun kemangi",
+                "Daun pandan",
+                "Daun seledri",
+                "Daun kunyit",
+                "Daun pisang",
+                "Daun singkong",
+                "Daun pepaya",
                 "Pala",
+                "Asam jawa",
+                "Bunga lawang",
                 "Kapulaga",
                 "Kayu manis",
-                "Cengkeh",
-                "Jinten",
-                "Asam jawa"
+                "Ketumbar",
+                "Merica",
+                "Jahe",
+                "Kunyit",
+                "Laos",
+                "Serai",
+                "Kemiri",
+                "Terasi",
+                "Jeruk nipis",
+                "Kencur",
+                "Lengkuas"
             ),
-            "Sayuran" to listOf(
-                "Tomat",
+            "Penyedap, Gula & Saus" to listOf(
+                "Penyedap",
+                "Gula merah",
+                "Gula pasir",
+                "Garam",
+                "Kecap manis",
+                "Kecap asin",
+                "Saus tiram",
+                "Saus sambal",
+                "Saus tomat",
+                "Santan",
+                "Kelapa parut",
+                "Mentega",
+                "Margarin"
+            ),
+            "Sayur & Jamur" to listOf(
+                "Tahu",
+                "Tempe",
+                "Jamur",
+                "Kentang",
+                "Wortel",
                 "Kubis",
                 "Kol",
-                "Wortel",
-                "Kentang",
-                "Kacang",
-                "Kangkung",
-                "Seledri",
-                "Sawi",
                 "Bayam",
-                "Jagung"
+                "Kangkung",
+                "Tomat",
+                "Jagung",
+                "Sawi",
+                "Terong",
+                "Kacang tanah",
+                "Kacang panjang",
+                "Kacang hijau",
+                "Kacang merah",
+                "Brokoli"
             ),
-            "Dedaunan" to listOf("Daun", "Nipis", "Pandan", "Kemangi"),
-            "Tepung & Lainnya" to listOf(
-                "Tepung",
-                "Minyak",
-                "Mentega",
-                "Santan",
-                "Kelapa",
-                "Susu",
+            "Tepung & Karbohidrat" to listOf(
+                "Nasi",
                 "Keju",
+                "Susu",
+                "Tepung terigu",
+                "Tepung beras",
+                "Tepung tapioka",
+                "Tepung maizena",
+                "Tepung panir",
+                "Tepung bumbu",
+                "Makaroni",
+                "Bihun",
                 "Mie",
-                "Pasta"
+                "Roti",
+                "Sosis"
             )
         )
 
-        // 2. Mapping ke UI Model dengan Ikon dan Warna
+        // 2. Mapping ke UI Model dengan Ikon dan Warna yang Representatif
         val categories = listOf(
-            Triple("Protein", Icons.Default.Egg, Color(0xFFA03B1A)),
-            Triple("Bumbu & Cabe", Icons.Default.Restaurant, Terracotta),
-            Triple("Rempah", Icons.Default.Grain, Color(0xFF8B4513)),
-            Triple("Sayuran", Icons.Default.SoupKitchen, SoftSage),
-            Triple("Dedaunan", Icons.Default.Eco, Color(0xFF4CAF50)),
-            Triple("Tepung & Lainnya", Icons.Default.Kitchen, Color(0xFF94A3B8))
+            Triple("Protein & Hewani", Icons.Default.Egg, Color(0xFFA03B1A)),
+            Triple("Cabai & Bawang", Icons.Default.LocalFireDepartment, Terracotta),
+            Triple("Sayur & Jamur", Icons.Default.SoupKitchen, SoftSage),
+            Triple("Daun & Rempah", Icons.Default.Eco, Color(0xFF4CAF50)),
+            Triple("Penyedap, Gula & Saus", Icons.Default.Kitchen, Color(0xFF8B4513)),
+            Triple("Tepung & Karbohidrat", Icons.Default.BakeryDining, Color(0xFF94A3B8))
         )
 
-        // 3. Langsung kembalikan list tanpa memproses database resep
+        // 3. Langsung kembalikan list grup bahan
         return categories.map { (name, icon, color) ->
             IngredientGroup(
                 categoryName = name,
