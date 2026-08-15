@@ -51,7 +51,7 @@ object DatabaseModule {
         // Mengembalikan objek detector tunggal ke dalam Dependency Graph Hilt
         return YOLO26Detector(
             context = context,
-            modelFilename = "yolo26n_float32.tflite",
+            modelFilename = "best_float32.tflite",
             detectionClasses = labels,
             useNNAPI = false
         )
