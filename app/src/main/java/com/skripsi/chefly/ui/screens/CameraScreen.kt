@@ -61,6 +61,9 @@ fun CameraScreen(
     val lifecycleOwner = LocalLifecycleOwner.current
 
     var activeTabUiState by remember { mutableIntStateOf(0) } // 0 = Kamera, 1 = Galeri
+    var isFlashOn by remember { mutableStateOf(false) }
+    var camera by remember { mutableStateOf<Camera?>(null) }
+
     val imageCapture = remember {
         ImageCapture.Builder()
             .setTargetRotation(Surface.ROTATION_0)
@@ -73,6 +76,11 @@ fun CameraScreen(
     val isProcessingImage by viewModel.isProcessingImage.collectAsStateWithLifecycle()
 
     val activeDisplayBitmap = capturedImage ?: uploadedImage
+
+    // Kontrol Lampu Flash / Torch
+    LaunchedEffect(isFlashOn, camera) {
+        camera?.cameraControl?.enableTorch(isFlashOn)
+    }
 
     // Launcher Galeri
     val galleryLauncher = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
@@ -106,7 +114,7 @@ fun CameraScreen(
         bottomSheetState = rememberStandardBottomSheetState(initialValue = SheetValue.PartiallyExpanded)
     )
 
-    // FITUR UX: Otomatis drag Bottom Sheet ke atas setelah foto berhasil di-capture/di-upload & dideteksi
+    // Fitur UX: Auto expand sheet saat inferensi selesai
     LaunchedEffect(activeDisplayBitmap, imageDetections) {
         if (activeDisplayBitmap != null && imageDetections.isNotEmpty()) {
             delay(150)
@@ -147,7 +155,6 @@ fun CameraScreen(
             DetectedIngredientsSheetContentContent(
                 detectedItems = imageDetections,
                 onAddMoreClick = {
-                    // 🟢 Simpan hasil deteksi ke repository sebelum navigasi ke tambah bahan
                     viewModel.saveCurrentDetectionsToRepository()
                     onAddMoreClick()
                 },
@@ -179,7 +186,12 @@ fun CameraScreen(
                                 }
                                 try {
                                     cameraProvider.unbindAll()
-                                    cameraProvider.bindToLifecycle(lifecycleOwner, CameraSelector.DEFAULT_BACK_CAMERA, preview, imageCapture)
+                                    camera = cameraProvider.bindToLifecycle(
+                                        lifecycleOwner,
+                                        CameraSelector.DEFAULT_BACK_CAMERA,
+                                        preview,
+                                        imageCapture
+                                    )
                                 } catch (e: Exception) {
                                     Log.e("CameraScreen", "Binding failed", e)
                                 }
@@ -213,6 +225,23 @@ fun CameraScreen(
 
             // --- 2. OVERLAY CONTROLS ---
 
+            // Tombol Flash (Top Left - Khusus Live Camera)
+            if (activeTabUiState == 0 && capturedImage == null) {
+                IconButton(
+                    onClick = { isFlashOn = !isFlashOn },
+                    modifier = Modifier
+                        .align(Alignment.TopStart)
+                        .padding(top = 40.dp, start = 20.dp)
+                        .background(Color.Black.copy(0.5f), CircleShape)
+                ) {
+                    Icon(
+                        imageVector = if (isFlashOn) Icons.Default.FlashOn else Icons.Default.FlashOff,
+                        contentDescription = "Senter",
+                        tint = if (isFlashOn) Color.Yellow else Color.White
+                    )
+                }
+            }
+
             // Tab Switcher (Top Center)
             Row(
                 modifier = Modifier
@@ -228,6 +257,29 @@ fun CameraScreen(
                 TabItemPill("Galeri", Icons.Default.Collections, activeTabUiState == 1) {
                     activeTabUiState = 1
                     galleryLauncher.launch("image/*")
+                }
+            }
+
+            // Tombol Kanan Atas: Buka Ulang Galeri atau Foto Ulang Kamera
+            if (activeDisplayBitmap != null) {
+                IconButton(
+                    onClick = {
+                        if (activeTabUiState == 1) {
+                            galleryLauncher.launch("image/*")
+                        } else {
+                            viewModel.resetCapture()
+                        }
+                    },
+                    modifier = Modifier
+                        .align(Alignment.TopEnd)
+                        .padding(top = 40.dp, end = 20.dp)
+                        .background(Color.Black.copy(0.5f), CircleShape)
+                ) {
+                    Icon(
+                        imageVector = if (activeTabUiState == 1) Icons.Default.Collections else Icons.Default.Refresh,
+                        contentDescription = if (activeTabUiState == 1) "Ganti Gambar Galeri" else "Foto Ulang",
+                        tint = Color.White
+                    )
                 }
             }
 
@@ -270,29 +322,6 @@ fun CameraScreen(
                             )
                         }
                 )
-            }
-
-            // Tombol Kanan Atas: Buka Ulang Galeri atau Foto Ulang Kamera
-            if (activeDisplayBitmap != null) {
-                IconButton(
-                    onClick = {
-                        if (activeTabUiState == 1) {
-                            galleryLauncher.launch("image/*")
-                        } else {
-                            viewModel.resetCapture()
-                        }
-                    },
-                    modifier = Modifier
-                        .align(Alignment.TopEnd)
-                        .padding(top = 40.dp, end = 20.dp)
-                        .background(Color.Black.copy(0.5f), CircleShape)
-                ) {
-                    Icon(
-                        imageVector = if (activeTabUiState == 1) Icons.Default.Collections else Icons.Default.Refresh,
-                        contentDescription = if (activeTabUiState == 1) "Ganti Gambar Galeri" else "Foto Ulang",
-                        tint = Color.White
-                    )
-                }
             }
 
             // Loading AI Overlay
