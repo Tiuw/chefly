@@ -1,23 +1,45 @@
 package com.skripsi.chefly.ui.screens
 
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.*
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.staggeredgrid.LazyVerticalStaggeredGrid
+import androidx.compose.foundation.lazy.staggeredgrid.StaggeredGridCells
+import androidx.compose.foundation.lazy.staggeredgrid.StaggeredGridItemSpan
+import androidx.compose.foundation.lazy.staggeredgrid.itemsIndexed
+import androidx.compose.foundation.lazy.staggeredgrid.rememberLazyStaggeredGridState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
+import androidx.compose.material.icons.outlined.BookmarkBorder
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextAlign
@@ -28,10 +50,13 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
+import com.airbnb.lottie.compose.*
+import com.skripsi.chefly.R
 import com.skripsi.chefly.data.Recipe
 import com.skripsi.chefly.ui.theme.*
 import com.skripsi.chefly.ui.viewmodel.CategoryData
 import com.skripsi.chefly.ui.viewmodel.RecipeViewModel
+import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -43,120 +68,270 @@ fun RecipeScreen(
     viewModel: RecipeViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    val focusManager = LocalFocusManager.current
+    val gridState = rememberLazyStaggeredGridState()
+    val coroutineScope = rememberCoroutineScope()
 
-    // Memproses query pencarian atau filter kategori yang dilempar dari navigasi
     LaunchedEffect(initialQuery, initialCategory) {
-        // Jika ada query dari pencarian
         if (initialQuery.isNotBlank() && initialQuery != uiState.searchQuery) {
             viewModel.onSearchQueryChanged(initialQuery)
         }
-
-        // Jika ada kategori dari Quick Section
         if (initialCategory.isNotBlank() && !initialCategory.equals(uiState.selectedCategory, ignoreCase = true)) {
             viewModel.onCategorySelected(initialCategory)
         }
     }
 
+    LaunchedEffect(uiState.selectedCategory, uiState.searchQuery) {
+        if (uiState.recipes.isNotEmpty()) {
+            coroutineScope.launch {
+                gridState.animateScrollToItem(0)
+            }
+        }
+    }
+
     Scaffold(
-        topBar = { ExploreTopBar() },
-        containerColor = CheflyBackground
+        containerColor = CheflyBackground,
+        topBar = {
+            TopAppBar(
+                title = {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        Surface(
+                            shape = RoundedCornerShape(12.dp),
+                            color = CheflySurfaceContainerLow,
+                            modifier = Modifier.size(38.dp)
+                        ) {
+                            Box(contentAlignment = Alignment.Center) {
+                                Icon(
+                                    Icons.Default.RestaurantMenu,
+                                    contentDescription = null,
+                                    tint = Terracotta,
+                                    modifier = Modifier.size(20.dp)
+                                )
+                            }
+                        }
+                        Column {
+                            Text(
+                                text = "Koleksi Resep",
+                                fontSize = 18.sp,
+                                fontWeight = FontWeight.Black,
+                                color = DeepCharcoal,
+                                letterSpacing = (-0.4).sp
+                            )
+                            Text(
+                                text = "Eksplorasi hidangan nusantara",
+                                fontSize = 11.sp,
+                                color = SecondaryText,
+                                fontWeight = FontWeight.Medium
+                            )
+                        }
+                    }
+                },
+                actions = {
+                    IconButton(
+                        onClick = onScanClick,
+                        modifier = Modifier
+                            .padding(end = 8.dp)
+                            .size(38.dp)
+                            .background(PureSurface, CircleShape)
+                            .border(1.dp, WhisperBorder, CircleShape)
+                    ) {
+                        Icon(
+                            Icons.Default.CenterFocusStrong,
+                            contentDescription = "Pindai Kamera",
+                            tint = Terracotta,
+                            modifier = Modifier.size(19.dp)
+                        )
+                    }
+                },
+                colors = TopAppBarDefaults.topAppBarColors(containerColor = CheflyBackground)
+            )
+        }
     ) { innerPadding ->
 
-        LazyColumn(
+        LazyVerticalStaggeredGrid(
+            state = gridState,
+            columns = StaggeredGridCells.Fixed(2),
             modifier = Modifier
                 .fillMaxSize()
                 .padding(innerPadding),
-            contentPadding = PaddingValues(
-                start = 16.dp,
-                end = 16.dp,
-                top = 16.dp,
-                bottom = 16.dp
-            ),
-            verticalArrangement = Arrangement.spacedBy(16.dp)
+            contentPadding = PaddingValues(start = 14.dp, end = 14.dp, top = 4.dp, bottom = 24.dp),
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+            verticalItemSpacing = 12.dp
         ) {
-            // 1. Search Bar Section
-            item {
-                SearchBarSection(
-                    query = uiState.searchQuery,
-                    onQueryChange = { viewModel.onSearchQueryChanged(it) }
-                )
+            // 1. Search Dock Container
+            item(span = StaggeredGridItemSpan.FullLine) {
+                Surface(
+                    shape = RoundedCornerShape(18.dp),
+                    color = PureSurface,
+                    border = BorderStroke(1.dp, if (uiState.searchQuery.isNotEmpty()) Terracotta else WhisperBorder),
+                    shadowElevation = 1.5.dp,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 4.dp)
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 12.dp, vertical = 10.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Surface(
+                            shape = RoundedCornerShape(10.dp),
+                            color = if (uiState.searchQuery.isNotEmpty()) Terracotta else CheflySurfaceContainerLow,
+                            modifier = Modifier.size(34.dp)
+                        ) {
+                            Box(contentAlignment = Alignment.Center) {
+                                Icon(
+                                    imageVector = Icons.Default.Search,
+                                    contentDescription = null,
+                                    tint = if (uiState.searchQuery.isNotEmpty()) PureSurface else Terracotta,
+                                    modifier = Modifier.size(18.dp)
+                                )
+                            }
+                        }
+
+                        Spacer(Modifier.width(12.dp))
+
+                        Box(modifier = Modifier.weight(1f)) {
+                            if (uiState.searchQuery.isEmpty()) {
+                                Text(
+                                    text = "Cari judul resep atau bumbu...",
+                                    color = SecondaryText.copy(alpha = 0.6f),
+                                    fontSize = 13.sp,
+                                    fontWeight = FontWeight.Normal
+                                )
+                            }
+                            BasicTextField(
+                                value = uiState.searchQuery,
+                                onValueChange = { viewModel.onSearchQueryChanged(it) },
+                                singleLine = true,
+                                textStyle = TextStyle(
+                                    fontSize = 13.sp,
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = DeepCharcoal
+                                ),
+                                keyboardOptions = KeyboardOptions(autoCorrectEnabled = false, imeAction = ImeAction.Search),
+                                keyboardActions = KeyboardActions(onSearch = { focusManager.clearFocus() }),
+                                cursorBrush = SolidColor(Terracotta),
+                                modifier = Modifier.fillMaxWidth()
+                            )
+                        }
+
+                        AnimatedVisibility(
+                            visible = uiState.searchQuery.isNotEmpty(),
+                            enter = fadeIn(),
+                            exit = fadeOut()
+                        ) {
+                            Surface(
+                                shape = CircleShape,
+                                color = CheflySurfaceContainerLow,
+                                modifier = Modifier
+                                    .size(24.dp)
+                                    .clickable { viewModel.onSearchQueryChanged("") }
+                            ) {
+                                Box(contentAlignment = Alignment.Center) {
+                                    Icon(
+                                        imageVector = Icons.Default.Close,
+                                        contentDescription = "Hapus",
+                                        tint = Terracotta,
+                                        modifier = Modifier.size(14.dp)
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
             }
 
-            // 2. Filter Kategori
-            item {
-                CategoriesSection(
+            // 2. Editorial Text-Based Category Bar
+            item(span = StaggeredGridItemSpan.FullLine) {
+                EditorialCategoryBar(
                     categories = uiState.categories,
+                    selectedCategory = uiState.selectedCategory,
                     onCategoryClick = { viewModel.onCategorySelected(it) }
                 )
             }
 
-            // 3. Header Section
-            item {
-                Text(
-                    text = if (uiState.searchQuery.isNotBlank()) "Hasil Pencarian Resep" else "Koleksi Resep Pilihan",
-                    fontSize = 18.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = DeepCharcoal,
-                    modifier = Modifier.padding(vertical = 4.dp)
-                )
+            // 3. Section Title & Counter
+            item(span = StaggeredGridItemSpan.FullLine) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(top = 2.dp, bottom = 2.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = if (uiState.searchQuery.isNotBlank()) "Hasil Penelusuran" else "Jelajahi Menu",
+                        fontSize = 15.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = DeepCharcoal
+                    )
+
+                    if (uiState.recipes.isNotEmpty()) {
+                        Surface(
+                            color = CheflySurfaceContainerLow,
+                            shape = RoundedCornerShape(8.dp)
+                        ) {
+                            Text(
+                                text = "${uiState.recipes.size} resep",
+                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = Terracotta
+                            )
+                        }
+                    }
+                }
             }
 
-            // 4. State Loading Awal
+            // 4. Loading Initial State
             if (uiState.isLoading && uiState.recipes.isEmpty()) {
-                item {
+                item(span = StaggeredGridItemSpan.FullLine) {
                     Box(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .height(200.dp),
+                            .height(260.dp),
                         contentAlignment = Alignment.Center
                     ) {
-                        CircularProgressIndicator(color = Terracotta)
+                        CircularProgressIndicator(
+                            color = Terracotta,
+                            strokeWidth = 3.dp,
+                            modifier = Modifier.size(36.dp)
+                        )
                     }
                 }
             }
 
-            // 5. State Kosong (Hasil Tidak Ditemukan)
+            // 5. Empty State Lottie
             if (!uiState.isLoading && uiState.recipes.isEmpty()) {
-                item {
-                    Column(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(32.dp),
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                        verticalArrangement = Arrangement.Center
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.SearchOff,
-                            contentDescription = null,
-                            tint = SecondaryText,
-                            modifier = Modifier.size(48.dp)
-                        )
-                        Spacer(modifier = Modifier.height(12.dp))
-                        Text(
-                            text = "Tidak ada resep yang cocok dengan pencarian ini.",
-                            fontSize = 14.sp,
-                            color = SecondaryText,
-                            textAlign = TextAlign.Center
-                        )
-                    }
+                item(span = StaggeredGridItemSpan.FullLine) {
+                    EmptySearchState()
                 }
             }
 
-            // 6. List Kartu Resep
-            items(
+            // 6. Staggered Recipe Cards
+            itemsIndexed(
                 items = uiState.recipes,
-                key = { it.id }
-            ) { recipe ->
-                ExtendedRecipeCard(
+                key = { _, recipe -> recipe.id }
+            ) { index, recipe ->
+                val imageHeight = if (index % 3 == 0) 180.dp else 145.dp
+
+                AnimatedRecipeCardWrapper(
+                    index = index,
                     recipe = recipe,
+                    imageHeight = imageHeight,
                     onClick = { onRecipeClick(recipe.id, 0f) },
                     onFavoriteClick = { viewModel.toggleFavorite(recipe) }
                 )
             }
 
-            // 7. Paginasi Otomatis (Infinite Scroll)
+            // 7. Infinite Scroll Trigger
             if (uiState.recipes.isNotEmpty() && !uiState.isEndReached && !uiState.isLoadMore) {
-                item {
+                item(span = StaggeredGridItemSpan.FullLine) {
                     LaunchedEffect(Unit) {
                         viewModel.loadNextPage()
                     }
@@ -165,29 +340,33 @@ fun RecipeScreen(
 
             // 8. Indicator Load More
             if (uiState.isLoadMore) {
-                item {
+                item(span = StaggeredGridItemSpan.FullLine) {
                     Box(
                         modifier = Modifier
                             .fillMaxWidth()
                             .padding(16.dp),
                         contentAlignment = Alignment.Center
                     ) {
-                        CircularProgressIndicator(modifier = Modifier.size(32.dp), color = Terracotta)
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(24.dp),
+                            color = Terracotta,
+                            strokeWidth = 2.5.dp
+                        )
                     }
                 }
             }
 
-            // 9. Footer Akhir Data
+            // 9. Footer
             if (uiState.isEndReached && uiState.recipes.isNotEmpty()) {
-                item {
+                item(span = StaggeredGridItemSpan.FullLine) {
                     Text(
-                        text = "Semua resep telah dimuat",
-                        fontSize = 12.sp,
-                        color = SecondaryText,
+                        text = "Semua menu telah dimuat",
+                        fontSize = 11.sp,
+                        color = SecondaryText.copy(alpha = 0.7f),
                         textAlign = TextAlign.Center,
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(16.dp)
+                            .padding(vertical = 12.dp)
                     )
                 }
             }
@@ -195,98 +374,104 @@ fun RecipeScreen(
     }
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
+/**
+ * Editorial Category Bar dengan Garis Indikator Halus
+ */
 @Composable
-fun ExploreTopBar() {
-    TopAppBar(
-        title = {
-            Text(
-                text = "Eksplorasi Resep",
-                fontSize = 18.sp,
-                fontWeight = FontWeight.Bold,
-                color = DeepCharcoal
-            )
-        },
-        colors = TopAppBarDefaults.topAppBarColors(containerColor = CheflyBackground)
-    )
-}
-
-@Composable
-fun SearchBarSection(query: String, onQueryChange: (String) -> Unit) {
-    OutlinedTextField(
-        value = query,
-        onValueChange = onQueryChange,
-        modifier = Modifier.fillMaxWidth(),
-        placeholder = { Text("Cari judul resep atau bahan...", color = SecondaryText) },
-        leadingIcon = { Icon(Icons.Default.Search, null, tint = SecondaryText) },
-        shape = RoundedCornerShape(14.dp),
-        singleLine = true,
-        keyboardOptions = KeyboardOptions(autoCorrectEnabled = false, imeAction = ImeAction.Search),
-        colors = OutlinedTextFieldDefaults.colors(
-            focusedContainerColor = PureSurface,
-            unfocusedContainerColor = PureSurface,
-            focusedBorderColor = Terracotta,
-            unfocusedBorderColor = WhisperBorder
-        )
-    )
-}
-
-@Composable
-fun CategoriesSection(categories: List<CategoryData>, onCategoryClick: (String) -> Unit) {
-    Column(modifier = Modifier.padding(vertical = 4.dp)) {
-        Text(
-            text = "Kategori Bahan",
-            fontSize = 15.sp,
-            fontWeight = FontWeight.Bold,
-            color = DeepCharcoal,
-            modifier = Modifier.padding(bottom = 10.dp)
-        )
-        LazyRow(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            items(categories) { category ->
-                CategoryCard(category = category, onClick = { onCategoryClick(category.name) })
-            }
-        }
-    }
-}
-
-@Composable
-fun CategoryCard(category: CategoryData, onClick: () -> Unit) {
-    Column(
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(6.dp),
-        modifier = Modifier.clickable { onClick() }
+fun EditorialCategoryBar(
+    categories: List<CategoryData>,
+    selectedCategory: String,
+    onCategoryClick: (String) -> Unit
+) {
+    LazyRow(
+        horizontalArrangement = Arrangement.spacedBy(20.dp),
+        contentPadding = PaddingValues(horizontal = 2.dp, vertical = 6.dp)
     ) {
-        Surface(
-            modifier = Modifier.size(60.dp),
-            shape = RoundedCornerShape(16.dp),
-            color = if (category.isActive) CheflySurfaceContainerLow else PureSurface,
-            border = BorderStroke(
-                width = if (category.isActive) 1.5.dp else 1.dp,
-                color = if (category.isActive) Terracotta else WhisperBorder
-            ),
-            shadowElevation = 0.5.dp
-        ) {
-            Box(contentAlignment = Alignment.Center) {
-                Icon(
-                    category.icon,
-                    contentDescription = null,
-                    tint = if (category.isActive) Terracotta else SecondaryText,
-                    modifier = Modifier.size(26.dp)
+        items(categories) { category ->
+            val isSelected = category.name.equals(selectedCategory, ignoreCase = true)
+
+            val textColor by animateColorAsState(
+                targetValue = if (isSelected) DeepCharcoal else SecondaryText.copy(alpha = 0.6f),
+                animationSpec = tween(durationMillis = 200),
+                label = "catTextColor"
+            )
+
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
+                modifier = Modifier
+                    .clickable(
+                        interactionSource = remember { MutableInteractionSource() },
+                        indication = null
+                    ) { onCategoryClick(category.name) }
+                    .padding(vertical = 4.dp)
+            ) {
+                Text(
+                    text = category.name,
+                    fontSize = 14.sp,
+                    fontWeight = if (isSelected) FontWeight.Black else FontWeight.SemiBold,
+                    color = textColor,
+                    letterSpacing = (-0.3).sp
+                )
+
+                Spacer(Modifier.height(5.dp))
+
+                Box(
+                    modifier = Modifier
+                        .height(3.dp)
+                        .width(if (isSelected) 18.dp else 0.dp)
+                        .clip(CircleShape)
+                        .background(if (isSelected) Terracotta else Color.Transparent)
                 )
             }
         }
-        Text(
-            text = category.name,
-            fontSize = 11.sp,
-            fontWeight = if (category.isActive) FontWeight.Bold else FontWeight.Medium,
-            color = if (category.isActive) Terracotta else DeepCharcoal
+    }
+}
+
+@Composable
+fun AnimatedRecipeCardWrapper(
+    index: Int,
+    recipe: Recipe,
+    imageHeight: androidx.compose.ui.unit.Dp,
+    onClick: () -> Unit,
+    onFavoriteClick: () -> Unit
+) {
+    val animState = remember { Animatable(initialValue = 0f) }
+
+    LaunchedEffect(recipe.id) {
+        val delayTime = (index.coerceAtMost(6) * 40)
+        kotlinx.coroutines.delay(delayTime.toLong())
+        animState.animateTo(
+            targetValue = 1f,
+            animationSpec = spring(
+                dampingRatio = Spring.DampingRatioLowBouncy,
+                stiffness = Spring.StiffnessLow
+            )
+        )
+    }
+
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .graphicsLayer {
+                alpha = animState.value
+                translationY = (1f - animState.value) * 50f
+                scaleX = 0.94f + (animState.value * 0.06f)
+                scaleY = 0.94f + (animState.value * 0.06f)
+            }
+    ) {
+        StaggeredRecipeCard(
+            recipe = recipe,
+            imageHeight = imageHeight,
+            onClick = onClick,
+            onFavoriteClick = onFavoriteClick
         )
     }
 }
 
 @Composable
-fun ExtendedRecipeCard(
+fun StaggeredRecipeCard(
     recipe: Recipe,
+    imageHeight: androidx.compose.ui.unit.Dp,
     onClick: () -> Unit,
     onFavoriteClick: () -> Unit
 ) {
@@ -294,7 +479,7 @@ fun ExtendedRecipeCard(
         modifier = Modifier
             .fillMaxWidth()
             .clickable { onClick() },
-        shape = RoundedCornerShape(20.dp),
+        shape = RoundedCornerShape(18.dp),
         colors = CardDefaults.cardColors(containerColor = PureSurface),
         elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
         border = BorderStroke(1.dp, WhisperBorder)
@@ -303,7 +488,7 @@ fun ExtendedRecipeCard(
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(180.dp)
+                    .height(imageHeight)
             ) {
                 AsyncImage(
                     model = ImageRequest.Builder(LocalContext.current)
@@ -315,61 +500,143 @@ fun ExtendedRecipeCard(
                     modifier = Modifier.fillMaxSize()
                 )
 
-                // Badge Kategori di atas gambar
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .background(
+                            Brush.verticalGradient(
+                                colors = listOf(
+                                    Color.Black.copy(alpha = 0.22f),
+                                    Color.Transparent,
+                                    Color.Black.copy(alpha = 0.52f)
+                                )
+                            )
+                        )
+                )
+
                 Surface(
                     modifier = Modifier
-                        .padding(12.dp)
+                        .padding(8.dp)
                         .align(Alignment.BottomStart),
-                    color = DeepCharcoal.copy(alpha = 0.7f),
-                    shape = RoundedCornerShape(8.dp)
+                    color = DeepCharcoal.copy(alpha = 0.82f),
+                    shape = RoundedCornerShape(6.dp)
                 ) {
                     Text(
                         text = recipe.category.uppercase(),
                         color = PureSurface,
-                        fontSize = 10.sp,
+                        fontSize = 9.sp,
                         fontWeight = FontWeight.Bold,
-                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                        letterSpacing = 0.4.sp,
+                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
                     )
                 }
-            }
 
-            Column(modifier = Modifier.padding(16.dp)) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
+                Surface(
+                    color = PureSurface.copy(alpha = 0.92f),
+                    shape = CircleShape,
+                    modifier = Modifier
+                        .align(Alignment.TopEnd)
+                        .padding(8.dp)
+                        .size(30.dp)
+                        .clickable { onFavoriteClick() }
                 ) {
-                    Text(
-                        text = recipe.name,
-                        fontSize = 16.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = DeepCharcoal,
-                        modifier = Modifier.weight(1f),
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
-
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(4.dp)
-                    ) {
-                        IconButton(onClick = onFavoriteClick, modifier = Modifier.size(28.dp)) {
-                            Icon(
-                                imageVector = if (recipe.isFavorite) Icons.Default.Bookmark else Icons.Default.BookmarkBorder,
-                                contentDescription = "Simpan Favorit",
-                                tint = if (recipe.isFavorite) Terracotta else MutedSlate
-                            )
-                        }
-
+                    Box(contentAlignment = Alignment.Center) {
                         Icon(
-                            imageVector = Icons.Default.ChevronRight,
-                            contentDescription = "Buka Detail",
-                            tint = SecondaryText.copy(alpha = 0.5f),
-                            modifier = Modifier.size(22.dp)
+                            imageVector = if (recipe.isFavorite) Icons.Default.Bookmark else Icons.Outlined.BookmarkBorder,
+                            contentDescription = "Simpan",
+                            tint = if (recipe.isFavorite) Terracotta else MutedSlate,
+                            modifier = Modifier.size(16.dp)
                         )
                     }
                 }
             }
+
+            Column(modifier = Modifier.padding(10.dp)) {
+                Text(
+                    text = recipe.name,
+                    fontSize = 13.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = DeepCharcoal,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                    lineHeight = 17.sp
+                )
+
+                Spacer(Modifier.height(8.dp))
+
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(3.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Favorite,
+                        contentDescription = null,
+                        tint = Terracotta,
+                        modifier = Modifier.size(12.dp)
+                    )
+                    Text(
+                        text = "${recipe.loves}",
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = SecondaryText
+                    )
+                }
+            }
         }
+    }
+}
+
+@Composable
+fun EmptySearchState() {
+    val composition by rememberLottieComposition(LottieCompositionSpec.RawRes(R.raw.empty_search))
+    val progress by animateLottieCompositionAsState(
+        composition = composition,
+        iterations = LottieConstants.IterateForever
+    )
+
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(top = 32.dp, bottom = 48.dp, start = 24.dp, end = 24.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center
+    ) {
+        if (composition != null) {
+            LottieAnimation(
+                composition = composition,
+                progress = { progress },
+                modifier = Modifier.size(150.dp)
+            )
+        } else {
+            Surface(
+                color = CheflySurfaceContainerLow,
+                shape = CircleShape,
+                modifier = Modifier.size(68.dp)
+            ) {
+                Box(contentAlignment = Alignment.Center) {
+                    Icon(
+                        imageVector = Icons.Default.SearchOff,
+                        contentDescription = null,
+                        tint = Terracotta,
+                        modifier = Modifier.size(32.dp)
+                    )
+                }
+            }
+            Spacer(modifier = Modifier.height(14.dp))
+        }
+
+        Text(
+            text = "Resep Tidak Ditemukan",
+            fontSize = 15.sp,
+            fontWeight = FontWeight.Bold,
+            color = DeepCharcoal
+        )
+        Spacer(modifier = Modifier.height(4.dp))
+        Text(
+            text = "Coba gunakan kata kunci lain atau pilih kategori yang berbeda.",
+            fontSize = 12.sp,
+            color = SecondaryText,
+            textAlign = TextAlign.Center
+        )
     }
 }

@@ -74,24 +74,30 @@ class RecipeViewModel @Inject constructor(
                 )
             )
 
-            dbCategories.forEach { cat ->
-                val icon = when (cat.lowercase()) {
-                    "ayam" -> Icons.Default.Restaurant
-                    "daging", "sapi" -> Icons.Default.DinnerDining
-                    "ikan", "seafood", "udang" -> Icons.Default.Sailing
-                    "telur" -> Icons.Default.EggAlt
-                    "sayur", "sayuran" -> Icons.Default.Eco
-                    "tahu", "tempe" -> Icons.Default.SetMeal
-                    else -> Icons.Default.Fastfood
-                }
-                mappedCategories.add(
-                    CategoryData(
-                        name = cat,
-                        icon = icon,
-                        isActive = currentSelected.equals(cat, ignoreCase = true)
+            // Filter out 'kambing' dan ubah ke Title Case
+            dbCategories
+                .filterNot { it.trim().equals("kambing", ignoreCase = true) }
+                .forEach { cat ->
+                    val cleanName = cat.trim().lowercase().replaceFirstChar {
+                        if (it.isLowerCase()) it.titlecase() else it.toString()
+                    }
+                    val icon = when (cleanName.lowercase()) {
+                        "ayam" -> Icons.Default.Restaurant
+                        "daging", "sapi" -> Icons.Default.DinnerDining
+                        "ikan", "seafood", "udang" -> Icons.Default.Sailing
+                        "telur" -> Icons.Default.EggAlt
+                        "sayur", "sayuran" -> Icons.Default.Eco
+                        "tahu", "tempe" -> Icons.Default.SetMeal
+                        else -> Icons.Default.Fastfood
+                    }
+                    mappedCategories.add(
+                        CategoryData(
+                            name = cleanName,
+                            icon = icon,
+                            isActive = currentSelected.equals(cleanName, ignoreCase = true)
+                        )
                     )
-                )
-            }
+                }
 
             _uiState.update { it.copy(categories = mappedCategories) }
         }
@@ -124,7 +130,6 @@ class RecipeViewModel @Inject constructor(
     }
 
     fun onCategorySelected(categoryName: String) {
-        // 1. Update status aktif pada list kategori (UI Chip)
         val updatedCategories = _uiState.value.categories.map {
             it.copy(isActive = it.name.equals(categoryName, ignoreCase = true))
         }
@@ -133,17 +138,14 @@ class RecipeViewModel @Inject constructor(
             it.copy(
                 selectedCategory = categoryName,
                 categories = updatedCategories,
-                searchQuery = "", // Kosongkan text field pencarian
+                searchQuery = "",
                 recipes = emptyList(),
                 currentPage = 0,
                 isEndReached = false
             )
         }
 
-        // 2. Reset flow debounce pencarian agar tidak memicu query lama
         _searchQueryInternal.value = ""
-
-        // 3. Ambil data baru berdasarkan kategori yang dipilih
         fetchFilteredRecipes()
     }
 
