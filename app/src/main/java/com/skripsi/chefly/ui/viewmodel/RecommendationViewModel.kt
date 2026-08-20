@@ -97,7 +97,6 @@ class RecommendationViewModel @Inject constructor(
             return
         }
 
-        // 🟢 Pastikan dbIngredients dihitung di sini
         val dbIngredients = ingredientsList.map { it.toDatabaseKey() }
         val dbCsvForQuery = dbIngredients.joinToString(",")
 
@@ -126,7 +125,7 @@ class RecommendationViewModel @Inject constructor(
                         isFavorite = currentFavorites.contains(fullRecipe.id),
                         similarity = result.similarityScore
                     )
-                }
+                }.take(10) // Batasi hanya 10 rekomendasi teratas
 
                 _uiState.update {
                     it.copy(

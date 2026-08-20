@@ -12,6 +12,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
@@ -118,7 +119,6 @@ fun MainScreen(
                         navController.navigate(Screen.TambahBahan.route)
                     },
                     onNavigateToResult = { selectedIngredients ->
-                        // 🟢 Map ke Database Key sebelum dikirim ke Recommendation
                         val dbKeys = selectedIngredients.map { it.toDatabaseKey() }
                         val ingredientsCsv = dbKeys.joinToString(",")
                         navController.navigate("${Screen.Rekomendasi.route}?ingredients=$ingredientsCsv")
@@ -134,10 +134,7 @@ fun MainScreen(
                     viewModel = viewModel,
                     onBackClick = { navController.popBackStack() },
                     onNavigateToResult = { selectedIngredients ->
-                        // 🟢 Simpan state agar saat balik (Edit), centang tidak hilang
                         viewModel.saveToRepository()
-
-                        // Kirim CSV asli (Ayam, Sapi), ViewModel yang akan me-mapping
                         val ingredientsCsv = selectedIngredients.joinToString(",")
                         navController.navigate("${Screen.Rekomendasi.route}?ingredients=$ingredientsCsv")
                     }
@@ -274,14 +271,20 @@ fun BottomNavigationBar(navController: NavHostController, currentRoute: String?)
                         }
                     }
                 },
-                label = { Text(label, fontSize = 10.sp) },
+                label = {
+                    Text(
+                        text = label,
+                        fontSize = 10.sp,
+                        fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium
+                    )
+                },
                 icon = { Icon(icon, contentDescription = label) },
                 colors = NavigationBarItemDefaults.colors(
                     selectedIconColor = themeTerracotta,
                     selectedTextColor = themeTerracotta,
                     indicatorColor = themeTerracotta.copy(alpha = 0.1f),
-                    unselectedIconColor = Color.Gray,
-                    unselectedTextColor = Color.Gray
+                    unselectedIconColor = Color(0xFF5F6368),
+                    unselectedTextColor = Color(0xFF5F6368)
                 )
             )
         }

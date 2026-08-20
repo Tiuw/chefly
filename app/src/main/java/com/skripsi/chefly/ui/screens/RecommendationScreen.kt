@@ -1,5 +1,6 @@
 package com.skripsi.chefly.ui.screens
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -77,11 +78,10 @@ fun RecommendationScreen(
                 contentPadding = PaddingValues(16.dp),
                 verticalArrangement = Arrangement.spacedBy(16.dp)
             ) {
-                // Header Interaktif (Chip Bahan + Tombol Tambah)
+                // Header Bahan Aktif
                 item {
                     RecommendationHeader(
                         ingredients = uiState.ingredients,
-                        onRemove = { ingredient -> viewModel.removeIngredient(ingredient) },
                         onAddMore = onAddMoreClick
                     )
                 }
@@ -109,12 +109,12 @@ fun RecommendationScreen(
 @Composable
 fun RecommendationHeader(
     ingredients: List<String>,
-    onRemove: (String) -> Unit,
     onAddMore: () -> Unit
 ) {
     Surface(
-        color = Terracotta.copy(alpha = 0.05f),
+        color = Color.White,
         shape = RoundedCornerShape(20.dp),
+        shadowElevation = 2.dp,
         modifier = Modifier.fillMaxWidth()
     ) {
         Column(modifier = Modifier.padding(16.dp)) {
@@ -123,16 +123,16 @@ fun RecommendationHeader(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Icon(Icons.Default.Inventory2, null, tint = Terracotta, modifier = Modifier.size(20.dp))
-                    Spacer(Modifier.width(8.dp))
-                    Text("Bahan Kamu", fontSize = 16.sp, fontWeight = FontWeight.Bold, color = Terracotta)
-                }
-
+                Text(
+                    text = "Bahan yang digunakan",
+                    fontSize = 16.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = Color.Black
+                )
                 TextButton(onClick = onAddMore) {
-                    Icon(Icons.Default.Add, null, modifier = Modifier.size(16.dp))
+                    Icon(Icons.Default.Edit, null, modifier = Modifier.size(16.dp), tint = Terracotta)
                     Spacer(Modifier.width(4.dp))
-                    Text("Edit Bahan", fontWeight = FontWeight.Bold, color = Terracotta)
+                    Text("Ubah", fontWeight = FontWeight.Bold, color = Terracotta)
                 }
             }
 
@@ -143,21 +143,19 @@ fun RecommendationHeader(
                 verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 ingredients.forEach { name ->
-                    FilterChip(
-                        selected = true,
-                        onClick = { /* Read-only: Tidak melakukan apa-apa saat diklik */ },
-                        label = { Text(name, fontSize = 13.sp) },
+                    Surface(
+                        color = Terracotta.copy(alpha = 0.1f),
                         shape = CircleShape,
-                        colors = FilterChipDefaults.filterChipColors(
-                            selectedContainerColor = Color.White,
-                            selectedLabelColor = Color.DarkGray
-                        ),
-                        border = FilterChipDefaults.filterChipBorder(
-                            enabled = true,
-                            selected = true,
-                            borderColor = Color(0xFFE2E8F0)
+                        border = BorderStroke(1.dp, Terracotta.copy(alpha = 0.2f))
+                    ) {
+                        Text(
+                            text = name,
+                            fontSize = 12.sp,
+                            color = Terracotta,
+                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+                            fontWeight = FontWeight.Medium
                         )
-                    )
+                    }
                 }
             }
         }
@@ -201,13 +199,11 @@ fun RecommendationRecipeCard(
     val ingredientAnalysis = remember(recipe, currentQuery) {
         val allRecipeIngredients = recipe.ingredientList
         if (currentQuery.isNotBlank()) {
-            // Normalisasi query (daging_ayam -> daging, ayam)
             val userTokens = currentQuery.split(Regex("[,\\s_]+"))
                 .map { it.trim().lowercase() }
                 .filter { it.isNotEmpty() }
 
             val availableCount = allRecipeIngredients.count { ingredient ->
-                // Normalisasi bahan resep (Daging Ayam -> dagingayam)
                 val cleaned = ingredient.lowercase().replace(" ", "").replace("_", "")
                 userTokens.any { token -> cleaned.contains(token) }
             }
@@ -221,7 +217,7 @@ fun RecommendationRecipeCard(
     Card(
         modifier = Modifier
             .fillMaxWidth()
-            .shadow(2.dp, RoundedCornerShape(20.dp)),
+            .shadow(4.dp, RoundedCornerShape(20.dp)),
         shape = RoundedCornerShape(20.dp),
         colors = CardDefaults.cardColors(containerColor = Color.White)
     ) {
@@ -229,7 +225,7 @@ fun RecommendationRecipeCard(
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(192.dp)
+                    .height(200.dp)
             ) {
                 AsyncImage(
                     model = ImageRequest.Builder(LocalContext.current)
@@ -240,6 +236,8 @@ fun RecommendationRecipeCard(
                     contentScale = ContentScale.Crop,
                     modifier = Modifier.fillMaxSize()
                 )
+
+                // Match Score Badge
                 if (isAiMode && recipe.similarity > 0f) {
                     Surface(
                         modifier = Modifier
@@ -253,7 +251,7 @@ fun RecommendationRecipeCard(
                             color = Color.White,
                             fontSize = 12.sp,
                             fontWeight = FontWeight.Bold,
-                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)
                         )
                     }
                 }
@@ -262,13 +260,12 @@ fun RecommendationRecipeCard(
             Column(modifier = Modifier.padding(16.dp)) {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text(
                         text = recipe.name,
                         fontSize = 18.sp,
-                        fontWeight = FontWeight.Medium,
+                        fontWeight = FontWeight.Bold,
                         color = Color(0xFF241916),
                         modifier = Modifier.weight(1f),
                         maxLines = 1,
@@ -285,61 +282,29 @@ fun RecommendationRecipeCard(
 
                 if (currentQuery.isNotBlank()) {
                     Row(
-                        modifier = Modifier.padding(top = 6.dp),
-                        horizontalArrangement = Arrangement.spacedBy(12.dp)
+                        modifier = Modifier.padding(top = 8.dp),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
-                        Text(
-                            text = "✓ $availableCount Tersedia",
-                            color = SoftSage,
-                            fontSize = 12.sp,
-                            fontWeight = FontWeight.Bold
+                        SuggestionChip(
+                            onClick = {},
+                            label = { Text("✓ $availableCount Tersedia", fontSize = 11.sp, fontWeight = FontWeight.Bold) },
+                            colors = SuggestionChipDefaults.suggestionChipColors(labelColor = SoftSage)
                         )
-                        Text(
-                            text = "+ $missingCount Bahan Kurang",
-                            color = Terracotta,
-                            fontSize = 12.sp,
-                            fontWeight = FontWeight.Bold
+                        SuggestionChip(
+                            onClick = {},
+                            label = { Text("+ $missingCount Kurang", fontSize = 11.sp, fontWeight = FontWeight.Bold) },
+                            colors = SuggestionChipDefaults.suggestionChipColors(labelColor = Terracotta)
                         )
                     }
                 }
 
                 Spacer(modifier = Modifier.height(12.dp))
-                HorizontalDivider(color = Color(0xFFCBD5E1).copy(alpha = 0.3f), thickness = 1.dp)
-
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(top = 16.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(4.dp)
-                        ) {
-                            Icon(Icons.Default.Schedule, null, tint = Color.Gray, modifier = Modifier.size(18.dp))
-                            Text("35m", fontSize = 14.sp, color = Color.Gray)
-                        }
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(4.dp)
-                        ) {
-                            Icon(Icons.Default.Restaurant, null, tint = Color.Gray, modifier = Modifier.size(18.dp))
-                            Text(
-                                text = if (recipe.stepList.size > 8) "Sedang" else "Mudah",
-                                fontSize = 14.sp,
-                                color = Color.Gray
-                            )
-                        }
-                    }
-                    Text(
-                        text = "Lihat Detail",
-                        fontSize = 14.sp,
-                        fontWeight = FontWeight.SemiBold,
-                        color = Terracotta
-                    )
-                }
+                Text(
+                    text = "Lihat resep selengkapnya",
+                    color = Terracotta,
+                    fontWeight = FontWeight.SemiBold,
+                    fontSize = 13.sp
+                )
             }
         }
     }
