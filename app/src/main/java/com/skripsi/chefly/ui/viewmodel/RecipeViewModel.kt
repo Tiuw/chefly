@@ -62,21 +62,37 @@ class RecipeViewModel @Inject constructor(
     }
 
     private fun loadDynamicCategories() {
-        viewModelScope.launch {
+        viewModelScope.launch(Dispatchers.IO) {
             val dbCategories = repository.getUniqueCategories(context)
-            val mappedCategories = mutableListOf(CategoryData("Semua", Icons.Default.AllInclusive, true))
+            val currentSelected = _uiState.value.selectedCategory
+
+            val mappedCategories = mutableListOf(
+                CategoryData(
+                    name = "Semua",
+                    icon = Icons.Default.AllInclusive,
+                    isActive = currentSelected.equals("Semua", ignoreCase = true)
+                )
+            )
 
             dbCategories.forEach { cat ->
                 val icon = when (cat.lowercase()) {
                     "ayam" -> Icons.Default.Restaurant
                     "daging", "sapi" -> Icons.Default.DinnerDining
-                    "ikan", "seafood" -> Icons.Default.Sailing
+                    "ikan", "seafood", "udang" -> Icons.Default.Sailing
                     "telur" -> Icons.Default.EggAlt
-                    "sayur" -> Icons.Default.Eco
-                    else -> Icons.Default.Fastfood // Default icon
+                    "sayur", "sayuran" -> Icons.Default.Eco
+                    "tahu", "tempe" -> Icons.Default.SetMeal
+                    else -> Icons.Default.Fastfood
                 }
-                mappedCategories.add(CategoryData(cat, icon))
+                mappedCategories.add(
+                    CategoryData(
+                        name = cat,
+                        icon = icon,
+                        isActive = currentSelected.equals(cat, ignoreCase = true)
+                    )
+                )
             }
+
             _uiState.update { it.copy(categories = mappedCategories) }
         }
     }
@@ -85,32 +101,67 @@ class RecipeViewModel @Inject constructor(
         viewModelScope.launch {
             favoriteManager.favoriteIds.collect { savedIds ->
                 _uiState.update { state ->
-                    state.copy(recipes = state.recipes.map { it.copy(isFavorite = savedIds.contains(it.id)) })
+                    state.copy(
+                        recipes = state.recipes.map { recipe ->
+                            recipe.copy(isFavorite = savedIds.contains(recipe.id))
+                        }
+                    )
                 }
             }
         }
     }
 
     fun onSearchQueryChanged(query: String) {
-        _uiState.update { it.copy(searchQuery = query, recipes = emptyList(), currentPage = 0, isEndReached = false) }
+        _uiState.update {
+            it.copy(
+                searchQuery = query,
+                recipes = emptyList(),
+                currentPage = 0,
+                isEndReached = false
+            )
+        }
         _searchQueryInternal.value = query
     }
 
     fun onCategorySelected(categoryName: String) {
-        val updatedCategories = _uiState.value.categories.map { it.copy(isActive = it.name == categoryName) }
-        _uiState.update { it.copy(selectedCategory = categoryName, categories = updatedCategories, recipes = emptyList(), currentPage = 0, isEndReached = false) }
+        // 1. Update status aktif pada list kategori (UI Chip)
+        val updatedCategories = _uiState.value.categories.map {
+            it.copy(isActive = it.name.equals(categoryName, ignoreCase = true))
+        }
+
+        _uiState.update {
+            it.copy(
+                selectedCategory = categoryName,
+                categories = updatedCategories,
+                searchQuery = "", // Kosongkan text field pencarian
+                recipes = emptyList(),
+                currentPage = 0,
+                isEndReached = false
+            )
+        }
+
+        // 2. Reset flow debounce pencarian agar tidak memicu query lama
+        _searchQueryInternal.value = ""
+
+        // 3. Ambil data baru berdasarkan kategori yang dipilih
         fetchFilteredRecipes()
     }
 
-    private fun performSearch() { fetchFilteredRecipes() }
+    private fun performSearch() {
+        fetchFilteredRecipes()
+    }
 
     private fun fetchFilteredRecipes() {
         val state = _uiState.value
         _uiState.update { it.copy(isLoading = true) }
 
         viewModelScope.launch(Dispatchers.IO) {
-            // MENGGUNAKAN PENCARIAN JUDUL MURNI
-            val results = repository.searchRecipesByTitle(context, state.searchQuery, state.selectedCategory, 0)
+            val results = repository.searchRecipesByTitle(
+                context = context,
+                query = state.searchQuery,
+                category = state.selectedCategory,
+                page = 0
+            )
 
             val currentFavoriteIds = favoriteManager.favoriteIds.first()
             val finalResults = results.map { it.copy(isFavorite = currentFavoriteIds.contains(it.id)) }
@@ -133,19 +184,32 @@ class RecipeViewModel @Inject constructor(
         val nextPage = state.currentPage + 1
 
         viewModelScope.launch(Dispatchers.IO) {
-            val results = repository.searchRecipesByTitle(context, state.searchQuery, state.selectedCategory, nextPage)
+            val results = repository.searchRecipesByTitle(
+                context = context,
+                query = state.searchQuery,
+                category = state.selectedCategory,
+                page = nextPage
+            )
             val currentFavoriteIds = favoriteManager.favoriteIds.first()
             val finalResults = results.map { it.copy(isFavorite = currentFavoriteIds.contains(it.id)) }
 
             if (finalResults.isEmpty()) {
                 _uiState.update { it.copy(isEndReached = true, isLoadMore = false) }
             } else {
-                _uiState.update { it.copy(recipes = it.recipes + finalResults, isLoadMore = false, currentPage = nextPage) }
+                _uiState.update {
+                    it.copy(
+                        recipes = it.recipes + finalResults,
+                        isLoadMore = false,
+                        currentPage = nextPage
+                    )
+                }
             }
         }
     }
 
     fun toggleFavorite(recipe: Recipe) {
-        viewModelScope.launch { favoriteManager.toggleFavorite(recipe.id) }
+        viewModelScope.launch {
+            favoriteManager.toggleFavorite(recipe.id)
+        }
     }
 }

@@ -37,22 +37,29 @@ import com.skripsi.chefly.ui.viewmodel.RecipeViewModel
 @Composable
 fun RecipeScreen(
     initialQuery: String = "",
+    initialCategory: String = "",
     onRecipeClick: (String, Float) -> Unit,
     onScanClick: () -> Unit,
     viewModel: RecipeViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
 
-    // Mengisi search bar jika ada query awal yang dilempar dari navigasi
-    LaunchedEffect(initialQuery) {
+    // Memproses query pencarian atau filter kategori yang dilempar dari navigasi
+    LaunchedEffect(initialQuery, initialCategory) {
+        // Jika ada query dari pencarian
         if (initialQuery.isNotBlank() && initialQuery != uiState.searchQuery) {
             viewModel.onSearchQueryChanged(initialQuery)
+        }
+
+        // Jika ada kategori dari Quick Section
+        if (initialCategory.isNotBlank() && !initialCategory.equals(uiState.selectedCategory, ignoreCase = true)) {
+            viewModel.onCategorySelected(initialCategory)
         }
     }
 
     Scaffold(
         topBar = { ExploreTopBar() },
-        containerColor = WarmIvory
+        containerColor = CheflyBackground
     ) { innerPadding ->
 
         LazyColumn(
@@ -63,7 +70,7 @@ fun RecipeScreen(
                 start = 16.dp,
                 end = 16.dp,
                 top = 16.dp,
-                bottom = 120.dp
+                bottom = 16.dp
             ),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
@@ -86,10 +93,10 @@ fun RecipeScreen(
             // 3. Header Section
             item {
                 Text(
-                    text = if (uiState.searchQuery.isNotBlank()) "Hasil Pencarian Judul" else "Rekomendasi untuk Anda",
+                    text = if (uiState.searchQuery.isNotBlank()) "Hasil Pencarian Resep" else "Koleksi Resep Pilihan",
                     fontSize = 18.sp,
                     fontWeight = FontWeight.Bold,
-                    color = Color.Black,
+                    color = DeepCharcoal,
                     modifier = Modifier.padding(vertical = 4.dp)
                 )
             }
@@ -121,21 +128,21 @@ fun RecipeScreen(
                         Icon(
                             imageVector = Icons.Default.SearchOff,
                             contentDescription = null,
-                            tint = Color.Gray,
+                            tint = SecondaryText,
                             modifier = Modifier.size(48.dp)
                         )
                         Spacer(modifier = Modifier.height(12.dp))
                         Text(
-                            text = "Tidak ada resep yang cocok dengan judul ini.",
+                            text = "Tidak ada resep yang cocok dengan pencarian ini.",
                             fontSize = 14.sp,
-                            color = Color.Gray,
+                            color = SecondaryText,
                             textAlign = TextAlign.Center
                         )
                     }
                 }
             }
 
-            // 6. List Kartu Resep Standar
+            // 6. List Kartu Resep
             items(
                 items = uiState.recipes,
                 key = { it.id }
@@ -176,7 +183,7 @@ fun RecipeScreen(
                     Text(
                         text = "Semua resep telah dimuat",
                         fontSize = 12.sp,
-                        color = Color.Gray,
+                        color = SecondaryText,
                         textAlign = TextAlign.Center,
                         modifier = Modifier
                             .fillMaxWidth()
@@ -192,9 +199,15 @@ fun RecipeScreen(
 @Composable
 fun ExploreTopBar() {
     TopAppBar(
-        title = { Text("Chefly", fontSize = 20.sp, fontWeight = FontWeight.SemiBold, color = Terracotta) },
-        colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.White),
-        modifier = Modifier.shadow(1.dp)
+        title = {
+            Text(
+                text = "Eksplorasi Resep",
+                fontSize = 18.sp,
+                fontWeight = FontWeight.Bold,
+                color = DeepCharcoal
+            )
+        },
+        colors = TopAppBarDefaults.topAppBarColors(containerColor = CheflyBackground)
     )
 }
 
@@ -204,25 +217,31 @@ fun SearchBarSection(query: String, onQueryChange: (String) -> Unit) {
         value = query,
         onValueChange = onQueryChange,
         modifier = Modifier.fillMaxWidth(),
-        placeholder = { Text("Cari judul resep...", color = Color.Gray) },
-        leadingIcon = { Icon(Icons.Default.Search, null, tint = Color.Gray) },
-        shape = RoundedCornerShape(12.dp),
+        placeholder = { Text("Cari judul resep atau bahan...", color = SecondaryText) },
+        leadingIcon = { Icon(Icons.Default.Search, null, tint = SecondaryText) },
+        shape = RoundedCornerShape(14.dp),
         singleLine = true,
-        keyboardOptions = KeyboardOptions(autoCorrect = false, imeAction = ImeAction.Search),
+        keyboardOptions = KeyboardOptions(autoCorrectEnabled = false, imeAction = ImeAction.Search),
         colors = OutlinedTextFieldDefaults.colors(
-            focusedContainerColor = Color.White,
-            unfocusedContainerColor = Color.White,
+            focusedContainerColor = PureSurface,
+            unfocusedContainerColor = PureSurface,
             focusedBorderColor = Terracotta,
-            unfocusedBorderColor = Color(0xFFE2E8F0).copy(alpha = 0.3f)
+            unfocusedBorderColor = WhisperBorder
         )
     )
 }
 
 @Composable
 fun CategoriesSection(categories: List<CategoryData>, onCategoryClick: (String) -> Unit) {
-    Column(modifier = Modifier.padding(vertical = 8.dp)) {
-        Text("Kategori", fontSize = 18.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(bottom = 12.dp))
-        LazyRow(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+    Column(modifier = Modifier.padding(vertical = 4.dp)) {
+        Text(
+            text = "Kategori Bahan",
+            fontSize = 15.sp,
+            fontWeight = FontWeight.Bold,
+            color = DeepCharcoal,
+            modifier = Modifier.padding(bottom = 10.dp)
+        )
+        LazyRow(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             items(categories) { category ->
                 CategoryCard(category = category, onClick = { onCategoryClick(category.name) })
             }
@@ -234,33 +253,33 @@ fun CategoriesSection(categories: List<CategoryData>, onCategoryClick: (String) 
 fun CategoryCard(category: CategoryData, onClick: () -> Unit) {
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(8.dp),
+        verticalArrangement = Arrangement.spacedBy(6.dp),
         modifier = Modifier.clickable { onClick() }
     ) {
         Surface(
-            modifier = Modifier.size(64.dp),
+            modifier = Modifier.size(60.dp),
             shape = RoundedCornerShape(16.dp),
-            color = PureSurface,
+            color = if (category.isActive) CheflySurfaceContainerLow else PureSurface,
             border = BorderStroke(
-                width = if (category.isActive) 2.dp else 1.dp,
+                width = if (category.isActive) 1.5.dp else 1.dp,
                 color = if (category.isActive) Terracotta else WhisperBorder
             ),
-            shadowElevation = 1.dp
+            shadowElevation = 0.5.dp
         ) {
             Box(contentAlignment = Alignment.Center) {
                 Icon(
                     category.icon,
                     contentDescription = null,
-                    tint = if (category.isActive) Terracotta else Color.Gray,
-                    modifier = Modifier.size(28.dp)
+                    tint = if (category.isActive) Terracotta else SecondaryText,
+                    modifier = Modifier.size(26.dp)
                 )
             }
         }
         Text(
             text = category.name,
             fontSize = 11.sp,
-            fontWeight = FontWeight.SemiBold,
-            color = if (category.isActive) Terracotta else Color.Gray
+            fontWeight = if (category.isActive) FontWeight.Bold else FontWeight.Medium,
+            color = if (category.isActive) Terracotta else DeepCharcoal
         )
     }
 }
@@ -274,22 +293,24 @@ fun ExtendedRecipeCard(
     Card(
         modifier = Modifier
             .fillMaxWidth()
-            .shadow(elevation = 2.dp, shape = RoundedCornerShape(20.dp)),
+            .clickable { onClick() },
         shape = RoundedCornerShape(20.dp),
-        colors = CardDefaults.cardColors(containerColor = Color.White)
+        colors = CardDefaults.cardColors(containerColor = PureSurface),
+        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
+        border = BorderStroke(1.dp, WhisperBorder)
     ) {
-        Column(modifier = Modifier.clickable { onClick() }) {
+        Column {
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(192.dp)
+                    .height(180.dp)
             ) {
                 AsyncImage(
                     model = ImageRequest.Builder(LocalContext.current)
                         .data(recipe.imageUrl)
                         .crossfade(true)
                         .build(),
-                    contentDescription = null,
+                    contentDescription = recipe.name,
                     contentScale = ContentScale.Crop,
                     modifier = Modifier.fillMaxSize()
                 )
@@ -299,12 +320,12 @@ fun ExtendedRecipeCard(
                     modifier = Modifier
                         .padding(12.dp)
                         .align(Alignment.BottomStart),
-                    color = Color.Black.copy(alpha = 0.55f),
+                    color = DeepCharcoal.copy(alpha = 0.7f),
                     shape = RoundedCornerShape(8.dp)
                 ) {
                     Text(
                         text = recipe.category.uppercase(),
-                        color = Color.White,
+                        color = PureSurface,
                         fontSize = 10.sp,
                         fontWeight = FontWeight.Bold,
                         modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
@@ -320,9 +341,9 @@ fun ExtendedRecipeCard(
                 ) {
                     Text(
                         text = recipe.name,
-                        fontSize = 18.sp,
-                        fontWeight = FontWeight.SemiBold,
-                        color = Color(0xFF241916),
+                        fontSize = 16.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = DeepCharcoal,
                         modifier = Modifier.weight(1f),
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis
@@ -343,8 +364,8 @@ fun ExtendedRecipeCard(
                         Icon(
                             imageVector = Icons.Default.ChevronRight,
                             contentDescription = "Buka Detail",
-                            tint = Color.Gray.copy(alpha = 0.6f),
-                            modifier = Modifier.size(24.dp)
+                            tint = SecondaryText.copy(alpha = 0.5f),
+                            modifier = Modifier.size(22.dp)
                         )
                     }
                 }

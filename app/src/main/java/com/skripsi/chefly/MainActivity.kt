@@ -108,6 +108,13 @@ fun MainScreen(
                             launchSingleTop = true
                             restoreState = true
                         }
+                    },
+                    onCategoryClick = { category ->
+                        // Hapus restoreState = true agar argumen kategori baru diproses segar
+                        navController.navigate("${Screen.Resep.route}?category=$category") {
+                            popUpTo(Screen.Beranda.route) { saveState = true }
+                            launchSingleTop = true
+                        }
                     }
                 )
             }
@@ -163,19 +170,28 @@ fun MainScreen(
                 )
             }
 
-            // --- All Recipes Screen (Khusus Pencarian Judul Standar Room DB) ---
+            // --- All Recipes Screen (Pencarian Standar DB & Filter Kategori) ---
             composable(
-                route = "${Screen.Resep.route}?query={query}",
-                arguments = listOf(navArgument("query") {
-                    type = NavType.StringType
-                    nullable = true
-                    defaultValue = null
-                })
+                route = "${Screen.Resep.route}?query={query}&category={category}",
+                arguments = listOf(
+                    navArgument("query") {
+                        type = NavType.StringType
+                        nullable = true
+                        defaultValue = null
+                    },
+                    navArgument("category") {
+                        type = NavType.StringType
+                        nullable = true
+                        defaultValue = null
+                    }
+                )
             ) { backStackEntry ->
                 val argumentQuery = backStackEntry.arguments?.getString("query") ?: ""
+                val argumentCategory = backStackEntry.arguments?.getString("category") ?: ""
 
                 RecipeScreen(
                     initialQuery = argumentQuery,
+                    initialCategory = argumentCategory,
                     onRecipeClick = { id, score ->
                         navController.navigate(
                             "${Screen.RecipeDetail.route.replace("{recipeId}", id)}?query=$argumentQuery&similarity=$score"
