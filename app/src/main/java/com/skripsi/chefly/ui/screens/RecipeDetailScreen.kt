@@ -21,7 +21,6 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
@@ -55,7 +54,6 @@ fun RecipeDetailScreen(
     val coroutineScope = rememberCoroutineScope()
     var startAnimation by remember { mutableStateOf(false) }
 
-    // Bookmark Micro-Interaction Scale State
     val bookmarkScale = remember { Animatable(1f) }
 
     LaunchedEffect(recipeId) {
@@ -119,8 +117,7 @@ fun RecipeDetailScreen(
                     val actualSimilarity = if (currentRecipe.similarity == 0f) passedSimilarity else currentRecipe.similarity
                     val displayScore = (actualSimilarity * 100).toInt()
 
-                    // Scroll-based Header Alpha & Translation for Sticky Bar
-                    val topBarThreshold = 450f
+                    val topBarThreshold = 420f
                     val headerAlpha = (scrollState.value / topBarThreshold).coerceIn(0f, 1f)
 
                     Column(
@@ -132,9 +129,8 @@ fun RecipeDetailScreen(
                         Box(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .height(320.dp)
+                                .height(310.dp)
                                 .graphicsLayer {
-                                    // Parallax translation effect
                                     translationY = scrollState.value * 0.45f
                                     alpha = (1f - (scrollState.value / 600f)).coerceIn(0f, 1f)
                                 }
@@ -147,7 +143,6 @@ fun RecipeDetailScreen(
                                 modifier = Modifier.fillMaxSize()
                             )
 
-                            // Scrim Gradient
                             Box(
                                 modifier = Modifier
                                     .fillMaxSize()
@@ -166,7 +161,7 @@ fun RecipeDetailScreen(
                             Row(
                                 modifier = Modifier
                                     .align(Alignment.BottomStart)
-                                    .padding(18.dp),
+                                    .padding(16.dp),
                                 horizontalArrangement = Arrangement.spacedBy(8.dp),
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
@@ -180,7 +175,7 @@ fun RecipeDetailScreen(
                                         fontWeight = FontWeight.Black,
                                         letterSpacing = 0.6.sp,
                                         color = PureSurface,
-                                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
+                                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
                                     )
                                 }
 
@@ -214,12 +209,11 @@ fun RecipeDetailScreen(
                         Column(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .padding(horizontal = 18.dp)
+                                .padding(horizontal = 16.dp)
                         ) {
-                            // Title with Staggered Entrance
                             AnimatedDetailSection(isVisible = startAnimation, delayMillis = 50) {
                                 Column {
-                                    Spacer(Modifier.height(18.dp))
+                                    Spacer(Modifier.height(16.dp))
                                     Text(
                                         text = currentRecipe.name,
                                         color = DeepCharcoal,
@@ -233,7 +227,7 @@ fun RecipeDetailScreen(
 
                             // AI Match Score Micro-Card
                             if (actualSimilarity > 0f) {
-                                AnimatedDetailSection(isVisible = startAnimation, delayMillis = 140) {
+                                AnimatedDetailSection(isVisible = startAnimation, delayMillis = 120) {
                                     Column {
                                         Spacer(Modifier.height(14.dp))
                                         Surface(
@@ -241,7 +235,7 @@ fun RecipeDetailScreen(
                                             shape = RoundedCornerShape(16.dp),
                                             color = PureSurface,
                                             border = BorderStroke(1.dp, WhisperBorder),
-                                            shadowElevation = 1.dp
+                                            shadowElevation = 0.5.dp
                                         ) {
                                             Column(modifier = Modifier.padding(14.dp)) {
                                                 Row(
@@ -254,7 +248,7 @@ fun RecipeDetailScreen(
                                                         horizontalArrangement = Arrangement.spacedBy(10.dp)
                                                     ) {
                                                         Surface(
-                                                            modifier = Modifier.size(38.dp),
+                                                            modifier = Modifier.size(36.dp),
                                                             shape = RoundedCornerShape(10.dp),
                                                             color = CheflySurfaceContainerLow
                                                         ) {
@@ -269,7 +263,7 @@ fun RecipeDetailScreen(
                                                         }
                                                         Column {
                                                             Text(
-                                                                text = "Kecocokan Bahan",
+                                                                text = "Kecocokan Bahan Kulkas",
                                                                 fontSize = 11.sp,
                                                                 fontWeight = FontWeight.Bold,
                                                                 color = SecondaryText
@@ -294,14 +288,14 @@ fun RecipeDetailScreen(
                                                 var progressTriggered by remember { mutableStateOf(false) }
                                                 LaunchedEffect(startAnimation) {
                                                     if (startAnimation) {
-                                                        delay(200)
+                                                        delay(180)
                                                         progressTriggered = true
                                                     }
                                                 }
 
                                                 val animatedProgress by animateFloatAsState(
                                                     targetValue = if (progressTriggered) actualSimilarity else 0f,
-                                                    animationSpec = tween(durationMillis = 1100, easing = FastOutSlowInEasing),
+                                                    animationSpec = tween(durationMillis = 900, easing = FastOutSlowInEasing),
                                                     label = "progressAnim"
                                                 )
 
@@ -310,7 +304,7 @@ fun RecipeDetailScreen(
                                                     progress = { animatedProgress },
                                                     modifier = Modifier
                                                         .fillMaxWidth()
-                                                        .height(6.dp)
+                                                        .height(5.dp)
                                                         .clip(CircleShape),
                                                     color = Terracotta,
                                                     trackColor = CheflySurfaceContainerLow
@@ -321,10 +315,10 @@ fun RecipeDetailScreen(
                                 }
                             }
 
-                            Spacer(Modifier.height(24.dp))
+                            Spacer(Modifier.height(22.dp))
 
                             // --- 3. Unified Ingredients Container ---
-                            AnimatedDetailSection(isVisible = startAnimation, delayMillis = 220) {
+                            AnimatedDetailSection(isVisible = startAnimation, delayMillis = 200) {
                                 Column {
                                     Row(
                                         modifier = Modifier.fillMaxWidth(),
@@ -354,29 +348,58 @@ fun RecipeDetailScreen(
                                         border = BorderStroke(1.dp, WhisperBorder),
                                         shadowElevation = 0.5.dp
                                     ) {
-                                        Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 6.dp)) {
-                                            val targetIngredients = if (actualSimilarity > 0f) {
-                                                availableIngredients.map { it to true } + missingIngredients.map { it to false }
-                                            } else {
-                                                currentRecipe.ingredientList.map { it to false }
-                                            }
+                                        Column(modifier = Modifier.padding(14.dp)) {
+                                            if (actualSimilarity > 0f) {
+                                                // Group 1: Bahan Tersedia di Kulkas
+                                                if (availableIngredients.isNotEmpty()) {
+                                                    IngredientGroupHeader(
+                                                        title = "Tersedia di Dapur",
+                                                        count = availableIngredients.size,
+                                                        accentColor = Color(0xFF2E6B47)
+                                                    )
+                                                    availableIngredients.forEachIndexed { index, name ->
+                                                        ExplicitIngredientRow(
+                                                            name = name,
+                                                            isAvailable = true,
+                                                            showDivider = index != availableIngredients.lastIndex || missingIngredients.isNotEmpty()
+                                                        )
+                                                    }
+                                                }
 
-                                            targetIngredients.forEachIndexed { index, (name, isAvailable) ->
-                                                CleanIngredientRow(
-                                                    name = name,
-                                                    isAvailable = isAvailable,
-                                                    showDivider = index != targetIngredients.lastIndex
-                                                )
+                                                // Group 2: Bahan Tambahan
+                                                if (missingIngredients.isNotEmpty()) {
+                                                    if (availableIngredients.isNotEmpty()) Spacer(Modifier.height(12.dp))
+                                                    IngredientGroupHeader(
+                                                        title = "Perlu Ditambahkan",
+                                                        count = missingIngredients.size,
+                                                        accentColor = Terracotta
+                                                    )
+                                                    missingIngredients.forEachIndexed { index, name ->
+                                                        ExplicitIngredientRow(
+                                                            name = name,
+                                                            isAvailable = false,
+                                                            showDivider = index != missingIngredients.lastIndex
+                                                        )
+                                                    }
+                                                }
+                                            } else {
+                                                currentRecipe.ingredientList.forEachIndexed { index, name ->
+                                                    ExplicitIngredientRow(
+                                                        name = name,
+                                                        isAvailable = null,
+                                                        showDivider = index != currentRecipe.ingredientList.lastIndex
+                                                    )
+                                                }
                                             }
                                         }
                                     }
                                 }
                             }
 
-                            Spacer(Modifier.height(28.dp))
+                            Spacer(Modifier.height(26.dp))
 
-                            // --- 4. Cara Memasak Section ---
-                            AnimatedDetailSection(isVisible = startAnimation, delayMillis = 300) {
+                            // --- 4. Cara Memasak Section (Data Asli Utuh) ---
+                            AnimatedDetailSection(isVisible = startAnimation, delayMillis = 280) {
                                 Column {
                                     Text(
                                         text = "Cara Memasak",
@@ -387,7 +410,7 @@ fun RecipeDetailScreen(
 
                                     Spacer(Modifier.height(14.dp))
 
-                                    Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                                    Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
                                         currentRecipe.stepList.forEachIndexed { index, stepText ->
                                             CleanInstructionRow(
                                                 stepNumber = index + 1,
@@ -408,7 +431,7 @@ fun RecipeDetailScreen(
                             .fillMaxWidth()
                             .align(Alignment.TopCenter),
                         color = PureSurface.copy(alpha = (headerAlpha * 0.95f)),
-                        shadowElevation = if (headerAlpha > 0.8f) 3.dp else 0.dp
+                        shadowElevation = if (headerAlpha > 0.8f) 2.dp else 0.dp
                     ) {
                         Row(
                             modifier = Modifier
@@ -437,9 +460,8 @@ fun RecipeDetailScreen(
                                 }
                             }
 
-                            // Dynamic Title on Sticky Scroll
                             AnimatedVisibility(
-                                visible = headerAlpha > 0.7f,
+                                visible = headerAlpha > 0.75f,
                                 enter = fadeIn(),
                                 exit = fadeOut(),
                                 modifier = Modifier.weight(1f).padding(horizontal = 12.dp)
@@ -455,7 +477,6 @@ fun RecipeDetailScreen(
                                 )
                             }
 
-                            // Bookmark Button with Spring Bounce Micro-Interaction
                             Surface(
                                 shape = CircleShape,
                                 color = PureSurface.copy(alpha = if (headerAlpha > 0.5f) 0.8f else 0.92f),
@@ -507,54 +528,94 @@ fun RecipeDetailScreen(
 }
 
 /**
- * Baris Bahan Bersih dengan Divider Halus
+ * Sub-Header Grup Bahan
  */
 @Composable
-fun CleanIngredientRow(
+fun IngredientGroupHeader(
+    title: String,
+    count: Int,
+    accentColor: Color
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(bottom = 6.dp, top = 2.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(6.dp)
+    ) {
+        Box(
+            modifier = Modifier
+                .size(6.dp)
+                .clip(CircleShape)
+                .background(accentColor)
+        )
+        Text(
+            text = "$title ($count)",
+            fontSize = 11.5.sp,
+            fontWeight = FontWeight.Bold,
+            color = accentColor,
+            letterSpacing = 0.4.sp
+        )
+    }
+}
+
+/**
+ * Baris Bahan dengan Kontras Badge Tinggi
+ */
+@Composable
+fun ExplicitIngredientRow(
     name: String,
-    isAvailable: Boolean,
+    isAvailable: Boolean?,
     showDivider: Boolean
 ) {
     Column(modifier = Modifier.fillMaxWidth()) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(vertical = 12.dp),
+                .padding(vertical = 10.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(10.dp),
+            Text(
+                text = name,
+                fontSize = 13.5.sp,
+                fontWeight = FontWeight.Medium,
+                color = DeepCharcoal,
                 modifier = Modifier.weight(1f)
-            ) {
-                Box(
-                    modifier = Modifier
-                        .size(6.dp)
-                        .clip(CircleShape)
-                        .background(if (isAvailable) SoftSage else Terracotta)
-                )
-                Text(
-                    text = name,
-                    fontSize = 13.5.sp,
-                    fontWeight = FontWeight.Medium,
-                    color = DeepCharcoal
-                )
-            }
+            )
 
-            if (isAvailable) {
-                Surface(
-                    shape = RoundedCornerShape(6.dp),
-                    color = SoftSage.copy(alpha = 0.15f)
-                ) {
-                    Text(
-                        text = "Tersedia",
-                        fontSize = 10.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = SoftSage,
-                        modifier = Modifier.padding(horizontal = 7.dp, vertical = 2.dp)
-                    )
+            when (isAvailable) {
+                true -> {
+                    Surface(
+                        shape = RoundedCornerShape(6.dp),
+                        color = Color(0xFFE8F5E9),
+                        border = BorderStroke(0.5.dp, Color(0xFFA5D6A7))
+                    ) {
+                        Text(
+                            text = "Tersedia",
+                            fontSize = 10.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = Color(0xFF1B5E20),
+                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
+                        )
+                    }
                 }
+                false -> {
+                    Surface(
+                        shape = RoundedCornerShape(6.dp),
+                        color = CheflySurfaceContainerLow,
+                        border = BorderStroke(0.5.dp, Terracotta.copy(alpha = 0.3f))
+                    ) {
+                        Text(
+                            text = "Beli",
+                            fontSize = 10.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = Terracotta,
+                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
+                        )
+                    }
+                }
+                null -> {}
             }
         }
 
@@ -577,7 +638,7 @@ fun CleanInstructionRow(
 ) {
     Row(
         modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.spacedBy(14.dp),
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
         verticalAlignment = Alignment.Top
     ) {
         Surface(
