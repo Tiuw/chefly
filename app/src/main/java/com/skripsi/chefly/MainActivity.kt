@@ -3,15 +3,24 @@ package com.skripsi.chefly
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
-import androidx.compose.foundation.layout.padding
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.*
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
+import androidx.compose.material.icons.outlined.*
 import androidx.compose.material3.*
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.collectAsState
-import androidx.compose.runtime.getValue
+import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -28,7 +37,7 @@ import com.skripsi.chefly.ui.navigation.Screen
 import com.skripsi.chefly.ui.screens.*
 import com.skripsi.chefly.ui.screens.onboarding.OnboardingScreen
 import com.skripsi.chefly.ui.screens.splash.SplashScreen
-import com.skripsi.chefly.ui.theme.CheflyTheme
+import com.skripsi.chefly.ui.theme.*
 import com.skripsi.chefly.ui.viewmodel.AddIngredientViewModel
 import com.skripsi.chefly.ui.viewmodel.MainViewModel
 import com.skripsi.chefly.ui.viewmodel.RecipeDetailViewModel
@@ -58,17 +67,12 @@ fun MainScreen(
 
     val isOnboardingCompleted by mainViewModel.isOnboardingCompleted.collectAsState()
 
-    Scaffold(
-        bottomBar = {
-            if (shouldShowBottomBar(currentRoute)) {
-                BottomNavigationBar(navController, currentRoute)
-            }
-        }
-    ) { innerPadding ->
+    // Menggunakan Box induk agar navbar mengambang bebas di atas NavHost (True Floating)
+    Box(modifier = Modifier.fillMaxSize()) {
         NavHost(
             navController = navController,
             startDestination = "splash",
-            modifier = Modifier.padding(innerPadding)
+            modifier = Modifier.fillMaxSize()
         ) {
             // --- Splash Screen ---
             composable("splash") {
@@ -110,7 +114,6 @@ fun MainScreen(
                         }
                     },
                     onCategoryClick = { category ->
-                        // Hapus restoreState = true agar argumen kategori baru diproses segar
                         navController.navigate("${Screen.Resep.route}?category=$category") {
                             popUpTo(Screen.Beranda.route) { saveState = true }
                             launchSingleTop = true
@@ -148,7 +151,7 @@ fun MainScreen(
                 )
             }
 
-            // --- Recommendation Screen (Khusus Hasil TF-IDF & Cosine Similarity) ---
+            // --- Recommendation Screen ---
             composable(
                 route = "${Screen.Rekomendasi.route}?ingredients={ingredients}",
                 arguments = listOf(navArgument("ingredients") {
@@ -170,7 +173,7 @@ fun MainScreen(
                 )
             }
 
-            // --- All Recipes Screen (Pencarian Standar DB & Filter Kategori) ---
+            // --- All Recipes Screen ---
             composable(
                 route = "${Screen.Resep.route}?query={query}&category={category}",
                 arguments = listOf(
@@ -255,55 +258,159 @@ fun MainScreen(
                 })
             }
         }
+
+        // Floating Navbar Overlay (Mengambang di atas konten yang di-scroll)
+        if (shouldShowBottomBar(currentRoute)) {
+            Box(
+                modifier = Modifier
+                    .align(Alignment.BottomCenter)
+                    .fillMaxWidth()
+                    .navigationBarsPadding()
+                    .padding(horizontal = 24.dp, vertical = 12.dp)
+            ) {
+                TrueFloatingBottomDock(navController, currentRoute)
+            }
+        }
     }
 }
 
+/**
+ * Modern Clean 4-Tab Floating Dock
+ */
 @Composable
-fun BottomNavigationBar(navController: NavHostController, currentRoute: String?) {
-    val themeTerracotta = Color(0xFFE36C47)
+fun TrueFloatingBottomDock(navController: NavHostController, currentRoute: String?) {
+    val navAction: (String) -> Unit = { route ->
+        if (currentRoute?.startsWith(route) != true) {
+            navController.navigate(route) {
+                popUpTo(Screen.Beranda.route) { saveState = true }
+                launchSingleTop = true
+                restoreState = true
+            }
+        }
+    }
 
-    NavigationBar(
-        containerColor = Color.White,
-        tonalElevation = 8.dp
+    Surface(
+        shape = RoundedCornerShape(26.dp),
+        color = PureSurface.copy(alpha = 0.95f),
+        border = BorderStroke(1.dp, WhisperBorder),
+        shadowElevation = 8.dp,
+        modifier = Modifier.fillMaxWidth()
     ) {
-        val items = listOf(
-            Triple("Beranda", Screen.Beranda.route, Icons.Default.Home),
-            Triple("Pindai", Screen.Pindai.route, Icons.Default.CenterFocusStrong),
-            Triple("Resep", Screen.Resep.route, Icons.Default.RestaurantMenu),
-            Triple("Simpan", Screen.Tersimpan.route, Icons.Default.Bookmark)
-        )
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 12.dp, vertical = 6.dp),
+            horizontalArrangement = Arrangement.SpaceAround,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            // 1. Beranda
+            DockNavItem(
+                label = "Beranda",
+                selectedIcon = Icons.Default.Home,
+                unselectedIcon = Icons.Outlined.Home,
+                isSelected = currentRoute?.startsWith(Screen.Beranda.route) == true,
+                onClick = { navAction(Screen.Beranda.route) },
+                modifier = Modifier.weight(1f)
+            )
 
-        items.forEach { (label, route, icon) ->
-            val isSelected = currentRoute?.startsWith(route) == true
+            // 2. Pindai (YOLO26 Camera)
+            DockNavItem(
+                label = "Pindai",
+                selectedIcon = Icons.Default.CenterFocusStrong,
+                unselectedIcon = Icons.Outlined.CenterFocusStrong,
+                isSelected = currentRoute?.startsWith(Screen.Pindai.route) == true,
+                onClick = { navAction(Screen.Pindai.route) },
+                modifier = Modifier.weight(1f)
+            )
 
-            NavigationBarItem(
-                selected = isSelected,
-                onClick = {
-                    if (!isSelected) {
-                        navController.navigate(route) {
-                            popUpTo(Screen.Beranda.route) { saveState = true }
-                            launchSingleTop = true
-                            restoreState = true
-                        }
-                    }
-                },
-                label = {
-                    Text(
-                        text = label,
-                        fontSize = 10.sp,
-                        fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium
-                    )
-                },
-                icon = { Icon(icon, contentDescription = label) },
-                colors = NavigationBarItemDefaults.colors(
-                    selectedIconColor = themeTerracotta,
-                    selectedTextColor = themeTerracotta,
-                    indicatorColor = themeTerracotta.copy(alpha = 0.1f),
-                    unselectedIconColor = Color(0xFF5F6368),
-                    unselectedTextColor = Color(0xFF5F6368)
-                )
+            // 3. Resep
+            DockNavItem(
+                label = "Resep",
+                selectedIcon = Icons.Default.RestaurantMenu,
+                unselectedIcon = Icons.Outlined.RestaurantMenu,
+                isSelected = currentRoute?.startsWith(Screen.Resep.route) == true,
+                onClick = { navAction(Screen.Resep.route) },
+                modifier = Modifier.weight(1f)
+            )
+
+            // 4. Simpan
+            DockNavItem(
+                label = "Simpan",
+                selectedIcon = Icons.Default.Bookmark,
+                unselectedIcon = Icons.Outlined.BookmarkBorder,
+                isSelected = currentRoute?.startsWith(Screen.Tersimpan.route) == true,
+                onClick = { navAction(Screen.Tersimpan.route) },
+                modifier = Modifier.weight(1f)
             )
         }
+    }
+}
+
+/**
+ * Item Tab dengan Capsule Indicator Ringan
+ */
+@Composable
+fun DockNavItem(
+    label: String,
+    selectedIcon: ImageVector,
+    unselectedIcon: ImageVector,
+    isSelected: Boolean,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val animatedColor by animateColorAsState(
+        targetValue = if (isSelected) Terracotta else SecondaryText,
+        animationSpec = tween(durationMillis = 180),
+        label = "navColorAnim"
+    )
+
+    val scale by animateFloatAsState(
+        targetValue = if (isSelected) 1.04f else 1f,
+        animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy),
+        label = "navScaleAnim"
+    )
+
+    Column(
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center,
+        modifier = modifier
+            .clip(RoundedCornerShape(18.dp))
+            .clickable(
+                interactionSource = remember { MutableInteractionSource() },
+                indication = null,
+                onClick = onClick
+            )
+            .padding(vertical = 4.dp)
+            .graphicsLayer {
+                scaleX = scale
+                scaleY = scale
+            }
+    ) {
+        Surface(
+            shape = RoundedCornerShape(12.dp),
+            color = if (isSelected) Terracotta.copy(alpha = 0.12f) else Color.Transparent
+        ) {
+            Box(
+                contentAlignment = Alignment.Center,
+                modifier = Modifier.padding(horizontal = 14.dp, vertical = 4.dp)
+            ) {
+                Icon(
+                    imageVector = if (isSelected) selectedIcon else unselectedIcon,
+                    contentDescription = label,
+                    tint = animatedColor,
+                    modifier = Modifier.size(20.dp)
+                )
+            }
+        }
+
+        Spacer(Modifier.height(2.dp))
+
+        Text(
+            text = label,
+            fontSize = 11.sp,
+            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
+            color = animatedColor
+        )
     }
 }
 

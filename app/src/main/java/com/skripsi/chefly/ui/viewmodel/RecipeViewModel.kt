@@ -118,9 +118,19 @@ class RecipeViewModel @Inject constructor(
     }
 
     fun onSearchQueryChanged(query: String) {
-        _uiState.update {
-            it.copy(
+        _uiState.update { state ->
+            val isSearching = query.isNotBlank()
+
+            state.copy(
                 searchQuery = query,
+                // Jika sedang mencari, reset pilihan kategori ke "Semua"
+                selectedCategory = if (isSearching) "Semua" else state.selectedCategory,
+                // Perbarui tab visual agar tab "Semua" menjadi aktif
+                categories = if (isSearching) {
+                    state.categories.map { it.copy(isActive = it.name.equals("Semua", ignoreCase = true)) }
+                } else {
+                    state.categories
+                },
                 recipes = emptyList(),
                 currentPage = 0,
                 isEndReached = false
