@@ -14,7 +14,10 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.camera.core.*
 import androidx.camera.lifecycle.ProcessCameraProvider
 import androidx.camera.view.PreviewView
+import androidx.compose.animation.*
+import androidx.compose.animation.core.*
 import androidx.compose.foundation.*
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -40,10 +43,7 @@ import androidx.core.content.ContextCompat
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.skripsi.chefly.data.model.DetectedIngredient
-import com.skripsi.chefly.ui.theme.DeepCharcoal
-import com.skripsi.chefly.ui.theme.SoftSage
-import com.skripsi.chefly.ui.theme.Terracotta
-import com.skripsi.chefly.ui.theme.WhisperBorder
+import com.skripsi.chefly.ui.theme.*
 import com.skripsi.chefly.ui.viewmodel.CameraViewModel
 import com.skripsi.chefly.util.toDatabaseKey
 import kotlinx.coroutines.delay
@@ -126,28 +126,22 @@ fun CameraScreen(
 
     BottomSheetScaffold(
         scaffoldState = scaffoldState,
-        sheetPeekHeight = 80.dp,
-        sheetContainerColor = Color.White,
-        sheetShape = RoundedCornerShape(topStart = 32.dp, topEnd = 32.dp),
+        sheetPeekHeight = 84.dp,
+        sheetContainerColor = PureSurface,
+        sheetShape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp),
+        sheetShadowElevation = 10.dp,
         sheetDragHandle = {
             Column(
                 horizontalAlignment = Alignment.CenterHorizontally,
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(vertical = 12.dp)
+                    .padding(top = 10.dp, bottom = 4.dp)
             ) {
                 Box(
                     Modifier
-                        .width(40.dp)
+                        .width(36.dp)
                         .height(4.dp)
-                        .background(Color.LightGray, CircleShape)
-                )
-                Spacer(Modifier.height(6.dp))
-                Text(
-                    text = "Geser ke atas untuk lihat bahan",
-                    fontSize = 11.sp,
-                    color = Color.Gray,
-                    fontWeight = FontWeight.Medium
+                        .background(WhisperBorder, CircleShape)
                 )
             }
         },
@@ -166,7 +160,12 @@ fun CameraScreen(
             )
         }
     ) { padding ->
-        Box(modifier = Modifier.fillMaxSize().padding(padding).background(Color.Black)) {
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(padding)
+                .background(Color.Black)
+        ) {
 
             // --- 1. AREA PREVIEW / HASIL (Full Screen) ---
             if (activeTabUiState == 0 && capturedImage == null) {
@@ -227,74 +226,99 @@ fun CameraScreen(
 
             // Tombol Flash (Top Left - Khusus Live Camera)
             if (activeTabUiState == 0 && capturedImage == null) {
-                IconButton(
-                    onClick = { isFlashOn = !isFlashOn },
+                Surface(
+                    shape = CircleShape,
+                    color = Color.Black.copy(alpha = 0.45f),
+                    border = BorderStroke(1.dp, Color.White.copy(alpha = 0.2f)),
                     modifier = Modifier
                         .align(Alignment.TopStart)
-                        .padding(top = 40.dp, start = 20.dp)
-                        .background(Color.Black.copy(0.5f), CircleShape)
+                        .statusBarsPadding()
+                        .padding(top = 16.dp, start = 16.dp)
+                        .size(42.dp)
+                        .clickable { isFlashOn = !isFlashOn }
                 ) {
-                    Icon(
-                        imageVector = if (isFlashOn) Icons.Default.FlashOn else Icons.Default.FlashOff,
-                        contentDescription = "Senter",
-                        tint = if (isFlashOn) Color.Yellow else Color.White
-                    )
+                    Box(contentAlignment = Alignment.Center) {
+                        Icon(
+                            imageVector = if (isFlashOn) Icons.Default.FlashOn else Icons.Default.FlashOff,
+                            contentDescription = "Senter",
+                            tint = if (isFlashOn) Color(0xFFFFD54F) else Color.White,
+                            modifier = Modifier.size(20.dp)
+                        )
+                    }
                 }
             }
 
             // Tab Switcher (Top Center)
-            Row(
+            Surface(
+                shape = CircleShape,
+                color = Color.Black.copy(alpha = 0.5f),
+                border = BorderStroke(1.dp, Color.White.copy(alpha = 0.15f)),
                 modifier = Modifier
                     .align(Alignment.TopCenter)
-                    .padding(top = 40.dp)
-                    .background(Color.Black.copy(0.6f), CircleShape)
-                    .padding(4.dp)
+                    .statusBarsPadding()
+                    .padding(top = 16.dp)
             ) {
-                TabItemPill("Kamera", Icons.Default.PhotoCamera, activeTabUiState == 0) {
-                    activeTabUiState = 0
-                    viewModel.resetCapture()
-                }
-                TabItemPill("Galeri", Icons.Default.Collections, activeTabUiState == 1) {
-                    activeTabUiState = 1
-                    galleryLauncher.launch("image/*")
+                Row(
+                    modifier = Modifier.padding(4.dp),
+                    horizontalArrangement = Arrangement.spacedBy(4.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    TabItemPill("Kamera", Icons.Default.PhotoCamera, activeTabUiState == 0) {
+                        activeTabUiState = 0
+                        viewModel.resetCapture()
+                    }
+                    TabItemPill("Galeri", Icons.Default.Collections, activeTabUiState == 1) {
+                        activeTabUiState = 1
+                        galleryLauncher.launch("image/*")
+                    }
                 }
             }
 
             // Tombol Kanan Atas: Buka Ulang Galeri atau Foto Ulang Kamera
             if (activeDisplayBitmap != null) {
-                IconButton(
-                    onClick = {
-                        if (activeTabUiState == 1) {
-                            galleryLauncher.launch("image/*")
-                        } else {
-                            viewModel.resetCapture()
-                        }
-                    },
+                Surface(
+                    shape = CircleShape,
+                    color = Color.Black.copy(alpha = 0.45f),
+                    border = BorderStroke(1.dp, Color.White.copy(alpha = 0.2f)),
                     modifier = Modifier
                         .align(Alignment.TopEnd)
-                        .padding(top = 40.dp, end = 20.dp)
-                        .background(Color.Black.copy(0.5f), CircleShape)
+                        .statusBarsPadding()
+                        .padding(top = 16.dp, end = 16.dp)
+                        .size(42.dp)
+                        .clickable {
+                            if (activeTabUiState == 1) {
+                                galleryLauncher.launch("image/*")
+                            } else {
+                                viewModel.resetCapture()
+                            }
+                        }
                 ) {
-                    Icon(
-                        imageVector = if (activeTabUiState == 1) Icons.Default.Collections else Icons.Default.Refresh,
-                        contentDescription = if (activeTabUiState == 1) "Ganti Gambar Galeri" else "Foto Ulang",
-                        tint = Color.White
-                    )
+                    Box(contentAlignment = Alignment.Center) {
+                        Icon(
+                            imageVector = if (activeTabUiState == 1) Icons.Default.Collections else Icons.Default.Refresh,
+                            contentDescription = if (activeTabUiState == 1) "Ganti Gambar Galeri" else "Foto Ulang",
+                            tint = Color.White,
+                            modifier = Modifier.size(20.dp)
+                        )
+                    }
                 }
             }
 
-            // Shutter Button (Bottom Center - Muncul saat Live Kamera)
+            // Shutter Button (Bottom Center)
             if (activeTabUiState == 0 && capturedImage == null) {
                 Box(
                     modifier = Modifier
                         .align(Alignment.BottomCenter)
-                        .padding(bottom = 96.dp)
-                        .size(80.dp)
-                        .border(4.dp, Color.White, CircleShape)
-                        .padding(6.dp)
+                        .padding(bottom = 100.dp)
+                        .size(76.dp)
+                        .border(3.5.dp, Color.White, CircleShape)
+                        .padding(5.dp)
                         .clip(CircleShape)
                         .background(Color.White)
-                        .clickable {
+                        .clickable(
+                            interactionSource = remember { MutableInteractionSource() },
+                            indication = null
+                        ) {
                             imageCapture.takePicture(
                                 ContextCompat.getMainExecutor(context),
                                 object : ImageCapture.OnImageCapturedCallback() {
@@ -326,11 +350,34 @@ fun CameraScreen(
 
             // Loading AI Overlay
             if (isProcessingImage) {
-                Box(Modifier.fillMaxSize().background(Color.Black.copy(0.4f)), contentAlignment = Alignment.Center) {
-                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        CircularProgressIndicator(color = Color.White)
-                        Spacer(Modifier.height(12.dp))
-                        Text("AI YOLO26 sedang mendeteksi...", color = Color.White, fontWeight = FontWeight.Bold)
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .background(Color.Black.copy(0.55f)),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Surface(
+                        shape = RoundedCornerShape(18.dp),
+                        color = Color.Black.copy(0.75f),
+                        border = BorderStroke(1.dp, Color.White.copy(0.15f))
+                    ) {
+                        Column(
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            modifier = Modifier.padding(horizontal = 24.dp, vertical = 20.dp)
+                        ) {
+                            CircularProgressIndicator(
+                                color = Terracotta,
+                                strokeWidth = 3.dp,
+                                modifier = Modifier.size(36.dp)
+                            )
+                            Spacer(Modifier.height(14.dp))
+                            Text(
+                                text = "Mendeteksi Bahan Makanan...",
+                                color = Color.White,
+                                fontSize = 13.5.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
                     }
                 }
             }
@@ -342,17 +389,33 @@ fun CameraScreen(
 
 @Composable
 fun TabItemPill(label: String, icon: ImageVector, isSelected: Boolean, onClick: () -> Unit) {
-    Row(
-        modifier = Modifier
-            .clip(CircleShape)
-            .background(if (isSelected) Terracotta else Color.Transparent)
-            .clickable { onClick() }
-            .padding(horizontal = 20.dp, vertical = 10.dp),
-        verticalAlignment = Alignment.CenterVertically
+    Surface(
+        shape = CircleShape,
+        color = if (isSelected) Terracotta else Color.Transparent,
+        modifier = Modifier.clickable(
+            interactionSource = remember { MutableInteractionSource() },
+            indication = null,
+            onClick = onClick
+        )
     ) {
-        Icon(icon, null, tint = Color.White, modifier = Modifier.size(18.dp))
-        Spacer(Modifier.width(8.dp))
-        Text(label, color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.Bold)
+        Row(
+            modifier = Modifier.padding(horizontal = 14.dp, vertical = 7.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(6.dp)
+        ) {
+            Icon(
+                imageVector = icon,
+                contentDescription = null,
+                tint = if (isSelected) PureSurface else Color.White.copy(alpha = 0.7f),
+                modifier = Modifier.size(16.dp)
+            )
+            Text(
+                text = label,
+                color = if (isSelected) PureSurface else Color.White.copy(alpha = 0.7f),
+                fontSize = 12.5.sp,
+                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium
+            )
+        }
     }
 }
 
@@ -363,35 +426,55 @@ fun DetectedIngredientsSheetContentContent(
     onAddMoreClick: () -> Unit,
     onSearchRecipesClick: (List<String>) -> Unit
 ) {
+    val uniqueIngredients = remember(detectedItems) {
+        detectedItems.map { it.label }.distinct()
+    }
+
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 24.dp, vertical = 16.dp)
+            .padding(horizontal = 20.dp, vertical = 12.dp)
     ) {
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Text(text = "Bahan Terdeteksi", fontSize = 18.sp, fontWeight = FontWeight.Bold, color = DeepCharcoal)
-            Surface(color = Color(0xFFFFF1ED), shape = RoundedCornerShape(8.dp)) {
+            Column {
                 Text(
-                    text = "${detectedItems.size} ITEM",
+                    text = "Bahan Terdeteksi",
+                    fontSize = 16.sp,
+                    fontWeight = FontWeight.Black,
+                    color = DeepCharcoal,
+                    letterSpacing = (-0.3).sp
+                )
+                Text(
+                    text = if (uniqueIngredients.isNotEmpty()) "Hasil pindai kamera" else "Arahkan kamera ke bahan makanan",
+                    fontSize = 11.5.sp,
+                    color = SecondaryText,
+                    fontWeight = FontWeight.Medium
+                )
+            }
+
+            Surface(
+                color = CheflySurfaceContainerLow,
+                shape = RoundedCornerShape(8.dp)
+            ) {
+                Text(
+                    text = "${uniqueIngredients.size} BAHAN",
                     color = Terracotta,
-                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
-                    fontSize = 12.sp,
+                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
+                    fontSize = 11.sp,
                     fontWeight = FontWeight.Bold
                 )
             }
         }
 
-        Spacer(modifier = Modifier.height(16.dp))
-
-        val uniqueIngredients = detectedItems.map { it.label }.distinct()
+        Spacer(modifier = Modifier.height(14.dp))
 
         FlowRow(
-            horizontalArrangement = Arrangement.spacedBy(10.dp),
-            verticalArrangement = Arrangement.spacedBy(10.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
             modifier = Modifier.fillMaxWidth()
         ) {
             uniqueIngredients.forEach { ingredient ->
@@ -399,58 +482,86 @@ fun DetectedIngredientsSheetContentContent(
             }
 
             Surface(
-                shape = CircleShape,
-                border = BorderStroke(1.dp, Terracotta),
-                color = Color(0xFFFFF1ED),
-                modifier = Modifier
-                    .clip(CircleShape)
-                    .clickable { onAddMoreClick() }
+                shape = RoundedCornerShape(999.dp),
+                border = BorderStroke(1.dp, Terracotta.copy(alpha = 0.35f)),
+                color = Terracotta.copy(alpha = 0.08f),
+                modifier = Modifier.clickable { onAddMoreClick() }
             ) {
                 Row(
-                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
-                    verticalAlignment = Alignment.CenterVertically
+                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(4.dp)
                 ) {
-                    Icon(Icons.Default.Add, null, tint = Terracotta, modifier = Modifier.size(18.dp))
-                    Spacer(modifier = Modifier.width(4.dp))
-                    Text(text = "Tambah Lagi", color = Terracotta, fontSize = 12.sp, fontWeight = FontWeight.Medium)
+                    Icon(
+                        imageVector = Icons.Default.Add,
+                        contentDescription = null,
+                        tint = Terracotta,
+                        modifier = Modifier.size(14.dp)
+                    )
+                    Text(
+                        text = "Tambah Manual",
+                        color = Terracotta,
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Bold
+                    )
                 }
             }
         }
 
-        Spacer(modifier = Modifier.height(24.dp))
+        Spacer(modifier = Modifier.height(20.dp))
 
         Button(
             onClick = { onSearchRecipesClick(uniqueIngredients) },
+            enabled = uniqueIngredients.isNotEmpty(),
             modifier = Modifier
                 .fillMaxWidth()
-                .height(56.dp),
-            colors = ButtonDefaults.buttonColors(containerColor = Terracotta),
-            shape = RoundedCornerShape(28.dp),
-            elevation = ButtonDefaults.buttonElevation(defaultElevation = 4.dp)
+                .height(48.dp),
+            colors = ButtonDefaults.buttonColors(
+                containerColor = Terracotta,
+                disabledContainerColor = CheflySurfaceContainerLow
+            ),
+            shape = RoundedCornerShape(14.dp)
         ) {
-            Icon(imageVector = Icons.Default.RestaurantMenu, contentDescription = null, tint = Color.White)
-            Spacer(modifier = Modifier.width(8.dp))
-            Text(text = "Cari Resep", fontSize = 18.sp, fontWeight = FontWeight.Bold, color = Color.White)
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                Icon(
+                    imageVector = Icons.Default.AutoAwesome,
+                    contentDescription = null,
+                    tint = if (uniqueIngredients.isNotEmpty()) PureSurface else SecondaryText,
+                    modifier = Modifier.size(16.dp)
+                )
+                Text(
+                    text = if (uniqueIngredients.isNotEmpty()) "Cari Resep Cocok" else "Pindai Bahan Dahulu",
+                    fontSize = 13.5.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = if (uniqueIngredients.isNotEmpty()) PureSurface else SecondaryText
+                )
+            }
         }
-        Spacer(modifier = Modifier.height(16.dp))
+        Spacer(modifier = Modifier.height(14.dp))
     }
 }
 
 @Composable
 fun IngredientChip(name: String) {
+    val cleanName = remember(name) {
+        name.trim().lowercase().replaceFirstChar { it.uppercase() }
+    }
+
     Surface(
-        shape = CircleShape,
-        border = BorderStroke(1.dp, WhisperBorder),
-        color = Color.White
+        shape = RoundedCornerShape(999.dp),
+        border = BorderStroke(1.dp, Color(0xFFE8E3DA)),
+        color = Color(0xFFF6F3EE)
     ) {
-        Row(
-            Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Icon(Icons.Default.CheckCircle, null, tint = SoftSage, modifier = Modifier.size(18.dp))
-            Spacer(Modifier.width(8.dp))
-            Text(name, fontSize = 14.sp)
-        }
+        Text(
+            text = cleanName,
+            fontSize = 12.5.sp,
+            fontWeight = FontWeight.SemiBold,
+            color = DeepCharcoal,
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
+        )
     }
 }
 
@@ -493,18 +604,18 @@ fun RenderBoundingBox(
         modifier = Modifier
             .offset(x = leftDp, y = topDp)
             .size(width = widthDp, height = heightDp)
-            .border(2.dp, Terracotta, RoundedCornerShape(4.dp))
+            .border(2.dp, Terracotta, RoundedCornerShape(6.dp))
     ) {
         Surface(
             color = Terracotta,
             modifier = Modifier.align(Alignment.TopStart),
-            shape = RoundedCornerShape(bottomEnd = 4.dp)
+            shape = RoundedCornerShape(topStart = 4.dp, bottomEnd = 6.dp)
         ) {
             Text(
                 text = "${detection.label} ${(detection.confidence * 100).toInt()}%",
-                color = Color.White,
+                color = PureSurface,
                 fontSize = 10.sp,
-                modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp),
+                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
                 fontWeight = FontWeight.Bold
             )
         }
