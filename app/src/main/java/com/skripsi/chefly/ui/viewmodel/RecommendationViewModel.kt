@@ -57,7 +57,8 @@ class RecommendationViewModel @Inject constructor(
                         it.copy(
                             ingredients = emptyList(),
                             recipes = emptyList(),
-                            ingredientsQuery = ""
+                            ingredientsQuery = "",
+                            isLoading = false
                         )
                     }
                 }
@@ -66,7 +67,7 @@ class RecommendationViewModel @Inject constructor(
     }
 
     /**
-     * Memastikan status bookmark/favorit tetap ter-update secara real-time.
+     * Memastikan status bookmark/favorit tetap sinkron secara real-time.
      */
     private fun observeFavorites() {
         viewModelScope.launch {
@@ -97,6 +98,7 @@ class RecommendationViewModel @Inject constructor(
             return
         }
 
+        // Standardisasi key format database (contoh: "Ayam" -> "daging_ayam", "Cabe Merah" -> "cabe_merah")
         val dbIngredients = ingredientsList.map { it.toDatabaseKey() }
         val dbCsvForQuery = dbIngredients.joinToString(",")
 
@@ -108,14 +110,14 @@ class RecommendationViewModel @Inject constructor(
         _uiState.update {
             it.copy(
                 isLoading = true,
-                ingredientsQuery = dbCsvForQuery, // Simpan format DB (daging_sapi) untuk pencocokan di Card
-                ingredients = ingredientsList    // Simpan format Tampilan (Sapi) untuk Chips
+                ingredientsQuery = dbCsvForQuery, // Format key database untuk pencocokan token di Card/Detail
+                ingredients = ingredientsList    // Format tampilan UI asli untuk Chip/Pantry
             )
         }
 
         viewModelScope.launch(Dispatchers.Default) {
             try {
-                // Gunakan dbIngredients untuk perhitungan AI
+                // Perhitungan Cosine Similarity menggunakan representasi token database
                 val aiRecommendations = recommendationSystem.getRecommendations(dbIngredients)
                 val currentFavorites = favoriteManager.favoriteIds.first()
 
@@ -125,7 +127,7 @@ class RecommendationViewModel @Inject constructor(
                         isFavorite = currentFavorites.contains(fullRecipe.id),
                         similarity = result.similarityScore
                     )
-                }.take(10) // Batasi hanya 10 rekomendasi teratas
+                }.take(10)
 
                 _uiState.update {
                     it.copy(

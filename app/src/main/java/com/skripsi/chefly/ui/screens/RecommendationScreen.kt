@@ -276,16 +276,27 @@ fun ModernRecommendationCard(
     onFavoriteClick: () -> Unit
 ) {
     val ingredientAnalysis = remember(recipe, currentQuery) {
-        val allRecipeIngredients = recipe.ingredientList
+        val allRecipeIngredients = recipe.ingredientList // List asli dari resep
+
         if (currentQuery.isNotBlank()) {
-            val userTokens = currentQuery.split(Regex("[,\\s_]+"))
+            // 1. Ambil kunci bahan user dari query (format: "daging_sapi,cabe_merah")
+            val userIngredientKeys = currentQuery.split(",")
                 .map { it.trim().lowercase() }
                 .filter { it.isNotEmpty() }
 
-            val availableCount = allRecipeIngredients.count { ingredient ->
-                val cleaned = ingredient.lowercase().replace(" ", "").replace("_", "")
-                userTokens.any { token -> cleaned.contains(token) }
+            val availableCount = allRecipeIngredients.count { recipeIng ->
+                val cleanedRecipeIng = recipeIng.lowercase()
+
+                // 2. Cek apakah ada KUNCI bahan user yang terkandung sebagai KATA UTUH
+                // Menggunakan Regex \b (word boundary) agar "garam" tidak cocok dengan "margarin"
+                // Menukar "_" dengan spasi atau tetap agar "cabe_merah" cocok dengan "cabe merah"
+                userIngredientKeys.any { key ->
+                    val humanReadableKey = key.replace("_", " ")
+                    val regex = Regex("\\b$humanReadableKey\\b|\\b$key\\b", RegexOption.IGNORE_CASE)
+                    regex.containsMatchIn(cleanedRecipeIng)
+                }
             }
+
             Pair(availableCount, (allRecipeIngredients.size - availableCount).coerceAtLeast(0))
         } else {
             Pair(0, allRecipeIngredients.size)

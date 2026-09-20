@@ -10,9 +10,6 @@ import javax.inject.Inject
 import javax.inject.Singleton
 import kotlin.math.sqrt
 
-/**
- * Data class untuk output hasil perangkingan resep ke UI layer
- */
 data class RecommendationResult(
     val recipeId: Int,
     val title: String,
@@ -26,52 +23,45 @@ class RecipeRecommendationSystem @Inject constructor(
     private val TAG = "Chefly_IR_System"
     private val gson = Gson()
 
-    // RAM Cache lokal untuk menghindari query SQLite berulang saat scroll / komposisi ulang UI
     private var idfMap: Map<String, Float>? = null
     private var recipeVectorsMap: Map<String, Map<String, Float>>? = null
     private var recipeTitlesMap: Map<String, String>? = null
 
-    /**
-     * Memuat kamus bobot IDF dan representasi Vektor Resep langsung dari SQLite Room Local
-     */
     suspend fun initializeRecommendationData() = withContext(Dispatchers.IO) {
         if (idfMap != null && recipeVectorsMap != null && recipeTitlesMap != null) return@withContext
 
         try {
             Log.d(TAG, "🔄 Memulai sinkronisasi data IR dari Room Database...")
 
-            // 1. Ambil data kamus IDF dari tabel idf_dictionary via Dao
             val idfEntities = recipeDao.getFullDictionary()
             idfMap = idfEntities.associate { it.ingredient to it.idfWeight.toFloat() }
 
-            // 2. Ambil data representasi matriks dari tabel tfidf_data via Dao
             val tfidfEntities = recipeDao.getAllTfidfData()
             val vectors = mutableMapOf<String, Map<String, Float>>()
             val type = object : TypeToken<Map<String, Float>>() {}.type
 
             tfidfEntities.forEach { entity ->
                 val vectorMap: Map<String, Float> = gson.fromJson(entity.vectorJson, type)
-                // entity.recipeId (String) masuk ke key String map penampung tanpa mismatch
                 vectors[entity.recipeId] = vectorMap
             }
             recipeVectorsMap = vectors
 
-            // 3. Ambil data nama/judul resep dari tabel resep utama untuk pemetaan UI
             val allRecipes = recipeDao.getAllOnceList()
             recipeTitlesMap = allRecipes.associate { it.id to (it.title ?: "Resep Tanpa Nama") }
 
-            Log.i(TAG, "✅ Sukses Sinkronisasi SQLite: ${idfMap?.size} Kamus IDF & ${recipeVectorsMap?.size} Vektor Resep Berhasil Dicache.")
+            Log.i(TAG, "✅ Sukses Sinkronisasi SQLite: ${idfMap?.size} Kamus IDF & ${recipeVectorsMap?.size} Vektor Resep.")
         } catch (e: Exception) {
             Log.e(TAG, "❌ Gagal menginisialisasi mesin komputasi IR: ${e.message}", e)
         }
     }
 
-    /**
-     * FUNGSI INTI: Komputasi Vektor Jarak Spasial Menggunakan Rumus Cosine Similarity
-     * @param userIngredients Daftar komponen bahan pangan masukan (Kamera YOLO26 / Centang Manual)
-     */
-    suspend fun getRecommendations(userIngredients: List<String>): List<RecommendationResult> = withContext(Dispatchers.Default) {
-        if (idfMap == null || recipeVectorsMap == null || recipeTitlesMap != null) {
+    suspend fun getRecommendations(
+        userIngredients: List<String>,
+        topN: Int = 10,
+        minMatchCount: Int = 2 // Diselaraskan dengan Python
+    ): List<RecommendationResult> = withContext(Dispatchers.Default) {
+        // Perbaikan kondisi cache (harus == null)
+        if (idfMap == null || recipeVectorsMap == null || recipeTitlesMap == null) {
             initializeRecommendationData()
         }
 
@@ -82,10 +72,9 @@ class RecipeRecommendationSystem @Inject constructor(
         val cleanUserIngredients = userIngredients.map { rawInput ->
             rawInput.trim()
                 .lowercase()
-                .replace(" ", "_") // 🟢 Mengunci spasi kembali menjadi underscore (_) agar sinkron 100% dengan database kamu
+                .replace(" ", "_")
         }.distinct()
 
-        // --- 2. PEMBENTUKAN VEKTOR QUERY USER ---
         val userVector = mutableMapOf<String, Float>()
         for (ingredient in cleanUserIngredients) {
             val idfValue = currentIdf[ingredient] ?: 0f
@@ -94,26 +83,36 @@ class RecipeRecommendationSystem @Inject constructor(
             }
         }
 
-// Pantau hasilnya di Logcat untuk sidang
-        android.util.Log.d("Chefly_Math_Debug", "Bahan dari UI: $userIngredients")
-        android.util.Log.d("Chefly_Math_Debug", "Format yang masuk ke Cosine: $cleanUserIngredients")
-        android.util.Log.d("Chefly_Math_Debug", "Vector Query Terbentuk: $userVector")
-
         if (userVector.isEmpty()) return@withContext emptyList()
 
-        // --- 2. PERHITUNGAN COSINE SIMILARITY (Tetap Murni Tanpa Merusak Rumus Matematika) ---
         var userMagnitudeSquared = 0f
-        for (weight in userVector.values) { userMagnitudeSquared += weight * weight }
+        for (weight in userVector.values) {
+            userMagnitudeSquared += weight * weight
+        }
         val userMagnitude = sqrt(userMagnitudeSquared)
         if (userMagnitude == 0f) return@withContext emptyList()
 
         val results = mutableListOf<RecommendationResult>()
 
         for ((recipeId, ingredientsVector) in currentVectors) {
+            // FILTER MIN_MATCH_COUNT (Sama seperti Python)
+            var matchCount = 0
+            for (ing in cleanUserIngredients) {
+                if (ingredientsVector.containsKey(ing)) {
+                    matchCount++
+                }
+            }
+
+            if (matchCount < minMatchCount) {
+                continue
+            }
+
             var dotProduct = 0f
             var recipeMagnitudeSquared = 0f
 
-            for (weight in ingredientsVector.values) { recipeMagnitudeSquared += weight * weight }
+            for (weight in ingredientsVector.values) {
+                recipeMagnitudeSquared += weight * weight
+            }
             val recipeMagnitude = sqrt(recipeMagnitudeSquared)
             if (recipeMagnitude == 0f) continue
 
@@ -135,12 +134,14 @@ class RecipeRecommendationSystem @Inject constructor(
                     RecommendationResult(
                         recipeId = recipeId.toIntOrNull() ?: 0,
                         title = currentTitles[recipeId] ?: "Resep #$recipeId",
-                        similarityScore = cosineSimilarityScore
+                        similarityScore = (cosineSimilarityScore * 10000).toInt() / 10000f // Pembulatan 4 desimal
                     )
                 )
             }
         }
 
-        return@withContext results.sortedByDescending { it.similarityScore }
+        return@withContext results
+            .sortedByDescending { it.similarityScore }
+            .take(topN)
     }
 }

@@ -94,18 +94,24 @@ fun RecipeDetailScreen(
                         val allRecipeIngredients = currentRecipe.ingredientList
 
                         if (currentQuery.isNotBlank()) {
-                            val userTokens = currentQuery.split(Regex("[,\\s]+"))
-                                .map { it.trim().lowercase().replace("_", "") }
+                            val userIngredientKeys = currentQuery.split(",")
+                                .map { it.trim().lowercase() }
                                 .filter { it.isNotEmpty() }
 
                             val availableList = mutableListOf<String>()
                             val missingList = mutableListOf<String>()
 
-                            for (ingredient in allRecipeIngredients) {
-                                val cleanedIngredient = ingredient.lowercase().replace(" ", "")
-                                val isMatched = userTokens.any { token -> cleanedIngredient.contains(token) }
+                            for (recipeIng in allRecipeIngredients) {
+                                val cleanedRecipeIng = recipeIng.lowercase()
 
-                                if (isMatched) availableList.add(ingredient) else missingList.add(ingredient)
+                                // Logika pencocokan kata utuh (Regex boundary)
+                                val isMatched = userIngredientKeys.any { key ->
+                                    val humanReadableKey = key.replace("_", " ")
+                                    val regex = Regex("\\b$humanReadableKey\\b|\\b$key\\b", RegexOption.IGNORE_CASE)
+                                    regex.containsMatchIn(cleanedRecipeIng)
+                                }
+
+                                if (isMatched) availableList.add(recipeIng) else missingList.add(recipeIng)
                             }
                             Pair(availableList, missingList)
                         } else {
