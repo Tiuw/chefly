@@ -47,8 +47,8 @@ class CameraViewModel @Inject constructor(
 
         viewModelScope.launch(Dispatchers.Default) {
             try {
-                // Inferensi dengan threshold optimal (0.50f)
-                val results = detector.detectObjects(bitmap, 0.50f)
+                // Inferensi dengan threshold optimal
+                val results = detector.detectObjects(bitmap, 0.07f)
                 val mapped = results.map { d ->
                     DetectedIngredient(
                         label = d.className,
@@ -86,7 +86,7 @@ class CameraViewModel @Inject constructor(
 
         viewModelScope.launch(Dispatchers.Default) {
             try {
-                val results = detector.detectObjects(bitmap, 0.50f)
+                val results = detector.detectObjects(bitmap, 0.07f)
                 val mapped = results.map { d ->
                     DetectedIngredient(
                         label = d.className,

@@ -1,3 +1,4 @@
+
 package com.skripsi.chefly.ml
 
 import android.content.Context
@@ -12,6 +13,9 @@ import org.tensorflow.lite.Interpreter
 import org.tensorflow.lite.support.common.FileUtil
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
+import java.util.Locale
+import kotlin.math.abs
+import kotlin.math.max
 import kotlin.math.min
 
 class YOLO26Detector(
@@ -20,33 +24,45 @@ class YOLO26Detector(
     private val detectionClasses: List<String>,
     useNNAPI: Boolean = false
 ) {
-
     companion object {
         private const val TAG = "YOLO26_DETECTION"
-
         private const val INPUT_SIZE = 640
-
-        private const val CONFIDENCE_THRESHOLD = 0.50f
-
+        private const val DEFAULT_CONFIDENCE = 0.07f
+        private const val NMS_IOU_THRESHOLD = 0.45f
         private const val MAX_DETECTIONS = 10
-
-        // Hanya tampilkan 20 prediction tertinggi di Logcat
         private const val DEBUG_TOP_K = 20
     }
 
+    private data class Candidate(
+        val index: Int,
+        val classId: Int,
+        val score: Float,
+        val x1: Float,
+        val y1: Float,
+        val x2: Float,
+        val y2: Float
+    )
+
     private var interpreter: Interpreter? = null
+    private var isClosed = false
 
-    private val isModelQuantized: Boolean
+    private lateinit var inputBuffer: ByteBuffer
+    private lateinit var inputShape: IntArray
 
-    private val imgData: ByteBuffer
+    private var inputType = DataType.FLOAT32
+    private var inputIsNCHW = true
+    private var inputScale = 0f
+    private var inputZeroPoint = 0
 
-    private val intValues =
-        IntArray(INPUT_SIZE * INPUT_SIZE)
+    private var outputShape = intArrayOf()
+    private var outputType = DataType.FLOAT32
 
-    @Volatile
-    private var isProcessing = false
+    private val intValues = IntArray(INPUT_SIZE * INPUT_SIZE)
 
     init {
+        require(detectionClasses.isNotEmpty()) {
+            "detectionClasses tidak boleh kosong."
+        }
 
         val options = Interpreter.Options().apply {
             setNumThreads(4)
@@ -54,222 +70,143 @@ class YOLO26Detector(
             setUseXNNPACK(true)
         }
 
-        val modelFile =
-            FileUtil.loadMappedFile(
+        try {
+            val modelBuffer = FileUtil.loadMappedFile(
                 context.applicationContext,
                 modelFilename
             )
 
-        val tflite =
-            Interpreter(
-                modelFile,
-                options
+            val tflite = Interpreter(modelBuffer, options)
+            interpreter = tflite
+
+            val inputTensor = tflite.getInputTensor(0)
+            inputShape = inputTensor.shape()
+            inputType = inputTensor.dataType()
+
+            require(inputShape.size == 4 && inputShape[0] == 1) {
+                "Input model tidak didukung: ${inputShape.contentToString()}"
+            }
+
+            val isNCHW =
+                inputShape[1] == 3 &&
+                        inputShape[2] == INPUT_SIZE &&
+                        inputShape[3] == INPUT_SIZE
+
+            val isNHWC =
+                inputShape[1] == INPUT_SIZE &&
+                        inputShape[2] == INPUT_SIZE &&
+                        inputShape[3] == 3
+
+            require(isNCHW || isNHWC) {
+                "Input harus [1,3,640,640] atau [1,640,640,3]. " +
+                        "Ditemukan ${inputShape.contentToString()}"
+            }
+
+            inputIsNCHW = isNCHW
+
+            val inputQuant = inputTensor.quantizationParams()
+            inputScale = inputQuant.scale
+            inputZeroPoint = inputQuant.zeroPoint
+
+            val bytesPerElement = when (inputType) {
+                DataType.FLOAT32 -> 4
+                DataType.UINT8, DataType.INT8 -> 1
+                else -> error("Tipe input tidak didukung: $inputType")
+            }
+
+            inputBuffer = ByteBuffer.allocateDirect(
+                INPUT_SIZE * INPUT_SIZE * 3 * bytesPerElement
+            ).order(ByteOrder.nativeOrder())
+
+            val outputTensor = tflite.getOutputTensor(0)
+            outputShape = outputTensor.shape()
+            outputType = outputTensor.dataType()
+
+            Log.d(TAG, "======================================")
+            Log.d(TAG, "YOLO26 DETECTOR INITIALIZED")
+            Log.d(TAG, "Model: $modelFilename")
+            Log.d(TAG, "Input shape: ${inputShape.contentToString()}")
+            Log.d(TAG, "Input type: $inputType")
+            Log.d(TAG, "Input layout: ${if (inputIsNCHW) "NCHW" else "NHWC"}")
+            Log.d(TAG, "Output shape: ${outputShape.contentToString()}")
+            Log.d(TAG, "Output type: $outputType")
+            Log.d(TAG, "Jumlah kelas: ${detectionClasses.size}")
+            Log.d(TAG, "Classes: $detectionClasses")
+            Log.d(TAG, "======================================")
+        } catch (e: Exception) {
+            interpreter?.close()
+            interpreter = null
+            throw IllegalStateException(
+                "Gagal menginisialisasi YOLO26Detector: ${e.message}",
+                e
             )
-
-        interpreter = tflite
-
-        val inputTensor =
-            tflite.getInputTensor(0)
-
-        isModelQuantized =
-            inputTensor.dataType() == DataType.UINT8
-
-        val bytesPerChannel =
-            if (isModelQuantized) {
-                1
-            } else {
-                4
-            }
-
-        imgData =
-            ByteBuffer.allocateDirect(
-                INPUT_SIZE *
-                        INPUT_SIZE *
-                        3 *
-                        bytesPerChannel
-            ).apply {
-                order(ByteOrder.nativeOrder())
-            }
-
-        // ================================================================
-        // INITIALIZATION LOG
-        // ================================================================
-
-        Log.d(TAG, "========================================")
-        Log.d(TAG, "YOLO26 DETECTOR INITIALIZED")
-        Log.d(TAG, "Model: $modelFilename")
-        Log.d(
-            TAG,
-            "Input shape: ${
-                inputTensor.shape().contentToString()
-            }"
-        )
-        Log.d(
-            TAG,
-            "Input type: ${inputTensor.dataType()}"
-        )
-        Log.d(
-            TAG,
-            "Model quantized: $isModelQuantized"
-        )
-        Log.d(
-            TAG,
-            "Jumlah class: ${detectionClasses.size}"
-        )
-        Log.d(
-            TAG,
-            "Classes: $detectionClasses"
-        )
-        Log.d(
-            TAG,
-            "Confidence threshold: $CONFIDENCE_THRESHOLD"
-        )
-        Log.d(
-            TAG,
-            "Debug Top-K: $DEBUG_TOP_K"
-        )
-        Log.d(TAG, "========================================")
+        }
     }
 
-    /**
-     * Inferensi objek menggunakan YOLO26 End-to-End / NMS-Free.
-     *
-     * Output model:
-     *
-     * [1, 300, 6]
-     *
-     * Setiap prediction:
-     *
-     * [x1, y1, x2, y2, confidence, class_id]
-     */
+    @Synchronized
     fun detectObjects(
         bitmap: Bitmap,
-        confidenceThreshold: Float = CONFIDENCE_THRESHOLD
+        confidenceThreshold: Float = DEFAULT_CONFIDENCE
     ): List<DetectionCamera> {
+        val tflite = interpreter ?: return emptyList()
 
-        val tflite =
-            interpreter ?: return emptyList()
-
-        if (isProcessing) {
-
-            Log.w(
-                TAG,
-                "Deteksi sedang diproses. Request diabaikan."
-            )
-
+        if (isClosed || bitmap.width <= 0 || bitmap.height <= 0) {
             return emptyList()
         }
 
+        var scaledBitmap: Bitmap? = null
+        var letterboxBitmap: Bitmap? = null
+
         try {
+            val originalWidth = bitmap.width
+            val originalHeight = bitmap.height
 
-            isProcessing = true
+            Log.d(TAG, "========== START DETECTION ==========")
+            Log.d(TAG, "Image: ${originalWidth}x${originalHeight}")
+            Log.d(TAG, "Confidence threshold: $confidenceThreshold")
 
-            val origW =
-                bitmap.width
-
-            val origH =
-                bitmap.height
-
-            // ============================================================
-            // START DETECTION
-            // ============================================================
-
-            Log.d(TAG, "")
-            Log.d(TAG, "========================================")
-            Log.d(TAG, "START YOLO26 DETECTION")
-            Log.d(
-                TAG,
-                "Original image: ${origW}x${origH}"
-            )
-            Log.d(
-                TAG,
-                "Confidence threshold: $confidenceThreshold"
-            )
-            Log.d(TAG, "========================================")
-
-            // ============================================================
             // 1. LETTERBOX
-            // ============================================================
+            val scale = min(
+                INPUT_SIZE.toFloat() / originalWidth,
+                INPUT_SIZE.toFloat() / originalHeight
+            )
 
-            val scale =
-                min(
-                    INPUT_SIZE.toFloat() / origW,
-                    INPUT_SIZE.toFloat() / origH
+            val resizedWidth = (originalWidth * scale)
+                .toInt()
+                .coerceIn(1, INPUT_SIZE)
+
+            val resizedHeight = (originalHeight * scale)
+                .toInt()
+                .coerceIn(1, INPUT_SIZE)
+
+            val padX = (INPUT_SIZE - resizedWidth) / 2f
+            val padY = (INPUT_SIZE - resizedHeight) / 2f
+
+            scaledBitmap = Bitmap.createScaledBitmap(
+                bitmap,
+                resizedWidth,
+                resizedHeight,
+                true
+            )
+
+            letterboxBitmap = Bitmap.createBitmap(
+                INPUT_SIZE,
+                INPUT_SIZE,
+                Bitmap.Config.ARGB_8888
+            )
+
+            Canvas(letterboxBitmap).apply {
+                drawColor(Color.rgb(114, 114, 114))
+                drawBitmap(
+                    scaledBitmap!!,
+                    padX,
+                    padY,
+                    Paint(Paint.FILTER_BITMAP_FLAG)
                 )
+            }
 
-            val newW =
-                (origW * scale).toInt()
-
-            val newH =
-                (origH * scale).toInt()
-
-            val padX =
-                (INPUT_SIZE - newW) / 2f
-
-            val padY =
-                (INPUT_SIZE - newH) / 2f
-
-            Log.d(
-                TAG,
-                "Letterbox scale: $scale"
-            )
-
-            Log.d(
-                TAG,
-                "Resized image: ${newW}x${newH}"
-            )
-
-            Log.d(
-                TAG,
-                "Padding X: $padX"
-            )
-
-            Log.d(
-                TAG,
-                "Padding Y: $padY"
-            )
-
-            val scaledBitmap =
-                Bitmap.createScaledBitmap(
-                    bitmap,
-                    newW,
-                    newH,
-                    true
-                )
-
-            val letterboxedBitmap =
-                Bitmap.createBitmap(
-                    INPUT_SIZE,
-                    INPUT_SIZE,
-                    Bitmap.Config.ARGB_8888
-                )
-
-            val canvas =
-                Canvas(letterboxedBitmap)
-
-            // Letterbox background = RGB 114
-            canvas.drawColor(
-                Color.rgb(
-                    114,
-                    114,
-                    114
-                )
-            )
-
-            canvas.drawBitmap(
-                scaledBitmap,
-                padX,
-                padY,
-                Paint(
-                    Paint.FILTER_BITMAP_FLAG
-                )
-            )
-
-            // ============================================================
-            // 2. INPUT BUFFER
-            // ============================================================
-
-            letterboxedBitmap.getPixels(
+            // 2. BACA PIXEL
+            letterboxBitmap.getPixels(
                 intValues,
                 0,
                 INPUT_SIZE,
@@ -279,509 +216,420 @@ class YOLO26Detector(
                 INPUT_SIZE
             )
 
-            imgData.rewind()
+            // 3. PREPROCESS INPUT RGB
+            inputBuffer.clear()
 
-            for (pixel in intValues) {
-
-                val r =
-                    (pixel ushr 16) and 0xFF
-
-                val g =
-                    (pixel ushr 8) and 0xFF
-
-                val b =
-                    pixel and 0xFF
-
-                if (isModelQuantized) {
-
-                    imgData.put(
-                        r.toByte()
-                    )
-
-                    imgData.put(
-                        g.toByte()
-                    )
-
-                    imgData.put(
-                        b.toByte()
-                    )
-
-                } else {
-
-                    imgData.putFloat(
-                        r / 255.0f
-                    )
-
-                    imgData.putFloat(
-                        g / 255.0f
-                    )
-
-                    imgData.putFloat(
-                        b / 255.0f
-                    )
+            if (inputIsNCHW) {
+                for (channel in 0..2) {
+                    for (pixel in intValues) {
+                        val value = when (channel) {
+                            0 -> (pixel ushr 16) and 0xFF
+                            1 -> (pixel ushr 8) and 0xFF
+                            else -> pixel and 0xFF
+                        }
+                        putInputValue(value)
+                    }
+                }
+            } else {
+                for (pixel in intValues) {
+                    putInputValue((pixel ushr 16) and 0xFF)
+                    putInputValue((pixel ushr 8) and 0xFF)
+                    putInputValue(pixel and 0xFF)
                 }
             }
 
-            // ============================================================
-            // 3. OUTPUT TENSOR
-            // ============================================================
+            inputBuffer.rewind()
 
-            val outputTensor =
-                tflite.getOutputTensor(0)
+            // 4. PERIKSA OUTPUT TENSOR
+            val outputTensor = tflite.getOutputTensor(0)
+            outputShape = outputTensor.shape()
+            outputType = outputTensor.dataType()
 
-            val shape =
-                outputTensor.shape()
+            Log.d(TAG, "Output shape: ${outputShape.contentToString()}")
+            Log.d(TAG, "Output type: $outputType")
 
-            Log.d(TAG, "")
-            Log.d(TAG, "========================================")
-            Log.d(TAG, "OUTPUT TENSOR")
-            Log.d(
-                TAG,
-                "Output shape: ${shape.contentToString()}"
-            )
-            Log.d(
-                TAG,
-                "Output type: ${outputTensor.dataType()}"
-            )
-            Log.d(TAG, "========================================")
+            require(outputType == DataType.FLOAT32) {
+                "Output harus FLOAT32, tetapi ditemukan $outputType."
+            }
 
-            /*
-             * YOLO26 End-to-End NMS-Free:
-             *
-             * [1, 300, 6]
-             *
-             * [x1, y1, x2, y2, confidence, class_id]
-             */
+            val shape = outputShape
 
-            val flatOut =
-                Array(shape[0]) {
+            require(shape.size == 3 && shape[0] == 1) {
+                "Bentuk output tidak didukung: ${shape.contentToString()}"
+            }
 
-                    Array(shape[1]) {
-
-                        FloatArray(
-                            shape[2]
-                        )
-                    }
+            // 5. SIAPKAN OUTPUT DAN JALANKAN INFERENCE
+            val output = Array(shape[0]) {
+                Array(shape[1]) {
+                    FloatArray(shape[2])
                 }
+            }
 
-            val outputs =
-                mutableMapOf<Int, Any>(
-                    0 to flatOut
-                )
+            val outputs = mutableMapOf<Int, Any>()
+            outputs[0] = output
 
-            // ============================================================
-            // 4. INFERENCE
-            // ============================================================
-
-            val inferenceStart =
-                System.currentTimeMillis()
+            val startTime = System.currentTimeMillis()
 
             tflite.runForMultipleInputsOutputs(
-                arrayOf(imgData),
+                arrayOf<Any>(inputBuffer),
                 outputs
             )
 
-            val inferenceTime =
-                System.currentTimeMillis() -
-                        inferenceStart
-
             Log.d(
                 TAG,
-                "Inference time: ${inferenceTime} ms"
+                "Inference time: ${System.currentTimeMillis() - startTime} ms"
             )
 
-            // ============================================================
-            // 5. VALIDATE OUTPUT FORMAT
-            // ============================================================
+            // Tensor hasil inference yang akan digunakan selanjutnya.
+            val rawOutput = outputs[0] as Array<Array<FloatArray>>
+
+            // 6. KENALI FORMAT OUTPUT
+            // Raw: [1, 4 + jumlah kelas, jumlah kandidat]
+            // NMS-free: format [1, jumlah kandidat, 6/7]
+            val isRaw =
+                shape[1] == 4 + detectionClasses.size &&
+                        shape[2] > 0
 
             val isNmsFree =
-                shape.size >= 3 &&
-                        (
-                                shape[2] == 6 ||
-                                        shape[2] == 7
-                                )
+                shape[1] == 300 && shape[2] in 6..7
 
-            if (!isNmsFree) {
-
-                Log.e(
-                    TAG,
-                    "FORMAT OUTPUT TIDAK DIKENALI!"
-                )
-
-                Log.e(
-                    TAG,
-                    "Shape: ${shape.contentToString()}"
-                )
-
+            if (!isRaw && !isNmsFree) {
+                Log.e(TAG, "Format output tidak dikenali: ${shape.contentToString()}")
                 return emptyList()
             }
 
-            val totalBoxes =
-                shape[1]
-
-            // ============================================================
-            // 6. AMBIL SEMUA RAW PREDICTION
-            // ============================================================
-
-            data class RawPrediction(
-                val index: Int,
-                val confidence: Float,
-                val classId: Int,
-                val className: String,
-                val x1: Float,
-                val y1: Float,
-                val x2: Float,
-                val y2: Float
+            Log.d(
+                TAG,
+                "Format output: ${if (isRaw) "RAW" else "NMS-FREE"}"
             )
 
-            val rawPredictions =
-                mutableListOf<RawPrediction>()
+            // 7. DIAGNOSTIK SKOR DAN KOORDINAT PER KELAS
+            // Tidak mengubah hasil deteksi; hanya menulis log.
+            if (isRaw) {
+                val numCandidates = rawOutput[0][0].size
 
-            for (b in 0 until totalBoxes) {
+                Log.d(TAG, "========== DIAGNOSTIK PER KELAS ==========")
 
-                val box =
-                    flatOut[0][b]
+                for (classId in detectionClasses.indices) {
+                    var bestScore = Float.NEGATIVE_INFINITY
+                    var bestIndex = -1
 
-                val x1 =
-                    box[0]
+                    for (i in 0 until numCandidates) {
+                        val score = rawOutput[0][4 + classId][i]
 
-                val y1 =
-                    box[1]
-
-                val x2 =
-                    box[2]
-
-                val y2 =
-                    box[3]
-
-                val score =
-                    box[4]
-
-                val clsId =
-                    box[5].toInt()
-
-                val className =
-                    if (
-                        clsId in
-                        detectionClasses.indices
-                    ) {
-
-                        detectionClasses[clsId]
-
-                    } else {
-
-                        "UNKNOWN_CLASS_$clsId"
+                        if (score.isFinite() && score > bestScore) {
+                            bestScore = score
+                            bestIndex = i
+                        }
                     }
 
-                rawPredictions.add(
-                    RawPrediction(
-                        index = b + 1,
-                        confidence = score,
-                        classId = clsId,
-                        className = className,
-                        x1 = x1,
-                        y1 = y1,
-                        x2 = x2,
-                        y2 = y2
-                    )
-                )
-            }
-
-            // ============================================================
-            // 7. TOP-20 RAW PREDICTION
-            // ============================================================
-
-            val topPredictions =
-                rawPredictions
-                    .sortedByDescending {
-                        it.confidence
+                    if (bestIndex < 0) {
+                        Log.d(TAG, "${detectionClasses[classId]}: tidak ada skor valid")
+                        continue
                     }
-                    .take(DEBUG_TOP_K)
-
-            Log.d(TAG, "")
-            Log.d(TAG, "========================================")
-            Log.d(TAG, "TOP-$DEBUG_TOP_K RAW PREDICTIONS")
-            Log.d(TAG, "Total raw output: $totalBoxes")
-            Log.d(TAG, "========================================")
-
-            topPredictions.forEachIndexed {
-                    rank,
-                    prediction ->
-
-                Log.d(
-                    TAG,
-                    "#${rank + 1} | " +
-                            "RAW=${prediction.index} | " +
-                            "ClassID=${prediction.classId} | " +
-                            "Class=${prediction.className} | " +
-                            "Confidence=${
-                                "%.4f".format(
-                                    prediction.confidence
-                                )
-                            } " +
-                            "(${
-                                "%.2f".format(
-                                    prediction.confidence * 100
-                                )
-                            }%) | " +
-                            "Box=[" +
-                            "${"%.4f".format(prediction.x1)}, " +
-                            "${"%.4f".format(prediction.y1)}, " +
-                            "${"%.4f".format(prediction.x2)}, " +
-                            "${"%.4f".format(prediction.y2)}]"
-                )
-            }
-
-            Log.d(TAG, "========================================")
-
-            // ============================================================
-            // 8. HITUNG BERAPA PREDICTION DI ATAS THRESHOLD
-            // ============================================================
-
-            val aboveThreshold =
-                rawPredictions.filter {
-                    it.confidence >= confidenceThreshold
-                }
-
-            Log.d(TAG, "")
-            Log.d(TAG, "========================================")
-            Log.d(
-                TAG,
-                "PREDICTION DI ATAS THRESHOLD"
-            )
-            Log.d(
-                TAG,
-                "Threshold: ${
-                    "%.2f".format(
-                        confidenceThreshold * 100
-                    )
-                }%"
-            )
-            Log.d(
-                TAG,
-                "Jumlah: ${aboveThreshold.size}"
-            )
-            Log.d(TAG, "========================================")
-
-            aboveThreshold
-                .sortedByDescending {
-                    it.confidence
-                }
-                .forEachIndexed {
-                        index,
-                        prediction ->
 
                     Log.d(
                         TAG,
-                        "#${index + 1} | " +
-                                "Class=${prediction.className} | " +
-                                "Confidence=${
-                                    "%.2f".format(
-                                        prediction.confidence * 100
-                                    )
-                                }%"
+                        "${detectionClasses[classId]} | " +
+                                "maxScore=${format(bestScore)} | " +
+                                "candidate=$bestIndex | " +
+                                "cx=${format(rawOutput[0][0][bestIndex])}, " +
+                                "cy=${format(rawOutput[0][1][bestIndex])}, " +
+                                "w=${format(rawOutput[0][2][bestIndex])}, " +
+                                "h=${format(rawOutput[0][3][bestIndex])}"
                     )
                 }
 
-            // ============================================================
-            // 9. KONVERSI KE DetectionCamera
-            // ============================================================
+                Log.d(TAG, "========== AKHIR DIAGNOSTIK ==========")
+            }
 
-            val detections =
-                mutableListOf<DetectionCamera>()
+            val candidates = mutableListOf<Candidate>()
 
-            for (prediction in aboveThreshold) {
+            // 8. PARSING KANDIDAT
+            if (isNmsFree) {
+                // Format ini mengasumsikan baris [x1,y1,x2,y2,score,classId].
+                for (i in 0 until shape[1]) {
+                    val row = rawOutput[0][i]
 
-                val clsId =
-                    prediction.classId
+                    val score = row[4]
+                    val classId = row[5].toInt()
 
-                if (
-                    clsId !in
-                    detectionClasses.indices
-                ) {
+                    if (!score.isFinite() || score < confidenceThreshold) continue
+                    if (classId !in detectionClasses.indices) continue
 
-                    Log.w(
-                        TAG,
-                        "ClassID tidak valid: $clsId"
+                    candidates.add(
+                        Candidate(
+                            index = i,
+                            classId = classId,
+                            score = score,
+                            x1 = row[0],
+                            y1 = row[1],
+                            x2 = row[2],
+                            y2 = row[3]
+                        )
                     )
+                }
+            } else {
+                val numberOfCandidates = shape[2]
+                val numberOfClasses = detectionClasses.size
 
-                    continue
+                // Koordinat YOLO raw bisa berupa pixel atau normalisasi 0..1.
+                var maxCoordinate = 0f
+
+                for (i in 0 until numberOfCandidates) {
+                    for (c in 0..3) {
+                        val value = rawOutput[0][c][i]
+                        if (value.isFinite()) {
+                            maxCoordinate = max(maxCoordinate, abs(value))
+                        }
+                    }
                 }
 
-                // ========================================================
-                // UNLETTERBOX
-                // ========================================================
+                val coordinatesNormalized = maxCoordinate <= 2f
+                val coordinateScale = if (coordinatesNormalized) {
+                    INPUT_SIZE.toFloat()
+                } else {
+                    1f
+                }
 
-                val left =
-                    (
-                            (
-                                    prediction.x1 *
-                                            INPUT_SIZE -
-                                            padX
-                                    ) / scale
-                            )
-                        .coerceIn(
-                            0f,
-                            origW.toFloat()
-                        ) / origW
+                Log.d(
+                    TAG,
+                    "Coordinate mode: ${
+                        if (coordinatesNormalized) "NORMALIZED" else "PIXEL"
+                    }"
+                )
 
-                val top =
-                    (
-                            (
-                                    prediction.y1 *
-                                            INPUT_SIZE -
-                                            padY
-                                    ) / scale
-                            )
-                        .coerceIn(
-                            0f,
-                            origH.toFloat()
-                        ) / origH
+                for (i in 0 until numberOfCandidates) {
+                    val cx = rawOutput[0][0][i] * coordinateScale
+                    val cy = rawOutput[0][1][i] * coordinateScale
+                    val width = rawOutput[0][2][i] * coordinateScale
+                    val height = rawOutput[0][3][i] * coordinateScale
 
-                val right =
-                    (
-                            (
-                                    prediction.x2 *
-                                            INPUT_SIZE -
-                                            padX
-                                    ) / scale
-                            )
-                        .coerceIn(
-                            0f,
-                            origW.toFloat()
-                        ) / origW
+                    if (!cx.isFinite() || !cy.isFinite()) continue
+                    if (!width.isFinite() || !height.isFinite()) continue
+                    if (width <= 0f || height <= 0f) continue
 
-                val bottom =
-                    (
-                            (
-                                    prediction.y2 *
-                                            INPUT_SIZE -
-                                            padY
-                                    ) / scale
-                            )
-                        .coerceIn(
-                            0f,
-                            origH.toFloat()
-                        ) / origH
+                    var bestScore = Float.NEGATIVE_INFINITY
+                    var bestClass = -1
 
-                // ========================================================
-                // VALIDASI BOX
-                // ========================================================
+                    for (c in 0 until numberOfClasses) {
+                        val score = rawOutput[0][4 + c][i]
 
-                if (
-                    right > left &&
-                    bottom > top
-                ) {
+                        if (score.isFinite() && score > bestScore) {
+                            bestScore = score
+                            bestClass = c
+                        }
+                    }
 
-                    detections.add(
-                        DetectionCamera(
-                            box = RectF(
-                                left,
-                                top,
-                                right,
-                                bottom
-                            ),
-                            confidence =
-                                prediction.confidence,
-                            classIndex =
-                                clsId,
-                            className =
-                                detectionClasses[clsId]
+                    if (bestClass !in detectionClasses.indices) continue
+                    if (!bestScore.isFinite() || bestScore < confidenceThreshold) continue
+
+                    val x1 = cx - width / 2f
+                    val y1 = cy - height / 2f
+                    val x2 = cx + width / 2f
+                    val y2 = cy + height / 2f
+
+                    // Lewati kotak yang sama sekali berada di luar input.
+                    if (x2 <= 0f || y2 <= 0f ||
+                        x1 >= INPUT_SIZE || y1 >= INPUT_SIZE
+                    ) {
+                        continue
+                    }
+
+                    candidates.add(
+                        Candidate(
+                            index = i,
+                            classId = bestClass,
+                            score = bestScore,
+                            x1 = x1,
+                            y1 = y1,
+                            x2 = x2,
+                            y2 = y2
                         )
                     )
                 }
             }
 
-            // ============================================================
-            // 10. SORT DAN LIMIT
-            // ============================================================
+            Log.d(TAG, "Kandidat lolos threshold: ${candidates.size}")
 
-            val finalResults =
-                detections
-                    .sortedByDescending {
-                        it.confidence
-                    }
-                    .take(MAX_DETECTIONS)
-
-            // ============================================================
-            // 11. FINAL RESULT
-            // ============================================================
-
-            Log.d(TAG, "")
-            Log.d(TAG, "========================================")
-            Log.d(TAG, "FINAL DETECTION RESULT")
-            Log.d(
-                TAG,
-                "Jumlah detection: ${finalResults.size}"
-            )
-            Log.d(TAG, "========================================")
-
-            if (finalResults.isEmpty()) {
-
-                Log.d(
-                    TAG,
-                    "Tidak ada objek yang melewati threshold."
-                )
-
-            } else {
-
-                finalResults.forEachIndexed {
-                        index,
-                        detection ->
-
+            candidates
+                .sortedByDescending { it.score }
+                .take(DEBUG_TOP_K)
+                .forEachIndexed { rank, candidate ->
                     Log.d(
                         TAG,
-                        "#${index + 1} | " +
-                                "Kelas=${detection.className} | " +
-                                "ClassID=${detection.classIndex} | " +
-                                "Confidence=${
-                                    "%.2f".format(
-                                        detection.confidence * 100
-                                    )
-                                }% | " +
-                                "Box=[" +
-                                "${"%.3f".format(detection.box.left)}, " +
-                                "${"%.3f".format(detection.box.top)}, " +
-                                "${"%.3f".format(detection.box.right)}, " +
-                                "${"%.3f".format(detection.box.bottom)}]"
+                        "#${rank + 1} index=${candidate.index}, " +
+                                "class=${detectionClasses[candidate.classId]}, " +
+                                "score=${format(candidate.score)}, " +
+                                "box=[${format(candidate.x1)}, ${format(candidate.y1)}, " +
+                                "${format(candidate.x2)}, ${format(candidate.y2)}]"
                     )
                 }
+
+            // 9. NMS PER KELAS UNTUK OUTPUT RAW.
+            // Output NMS-free dianggap sudah melalui NMS oleh model.
+            val selected = if (isNmsFree) {
+                candidates.sortedByDescending { it.score }
+            } else {
+                classWiseNms(candidates, NMS_IOU_THRESHOLD)
             }
 
-            Log.d(TAG, "========================================")
-            Log.d(TAG, "END DETECTION")
-            Log.d(TAG, "")
+            // 10. UNLETTERBOX DAN NORMALISASI KE GAMBAR ASLI
+            val detections = mutableListOf<DetectionCamera>()
 
-            return finalResults
+            for (candidate in selected) {
+                val leftPixels = (
+                        (candidate.x1 - padX) / scale
+                        ).coerceIn(0f, originalWidth.toFloat())
 
+                val topPixels = (
+                        (candidate.y1 - padY) / scale
+                        ).coerceIn(0f, originalHeight.toFloat())
+
+                val rightPixels = (
+                        (candidate.x2 - padX) / scale
+                        ).coerceIn(0f, originalWidth.toFloat())
+
+                val bottomPixels = (
+                        (candidate.y2 - padY) / scale
+                        ).coerceIn(0f, originalHeight.toFloat())
+
+                if (rightPixels <= leftPixels || bottomPixels <= topPixels) continue
+
+                detections.add(
+                    DetectionCamera(
+                        box = RectF(
+                            leftPixels / originalWidth,
+                            topPixels / originalHeight,
+                            rightPixels / originalWidth,
+                            bottomPixels / originalHeight
+                        ),
+                        confidence = candidate.score,
+                        classIndex = candidate.classId,
+                        className = detectionClasses[candidate.classId]
+                    )
+                )
+
+                if (detections.size >= MAX_DETECTIONS) break
+            }
+
+            Log.d(TAG, "========== FINAL RESULT ==========")
+            Log.d(TAG, "Jumlah deteksi: ${detections.size}")
+
+            detections.forEachIndexed { index, detection ->
+                Log.d(
+                    TAG,
+                    "#${index + 1} ${detection.className} " +
+                            "confidence=${format(detection.confidence)} " +
+                            "box=${detection.box}"
+                )
+            }
+
+            Log.d(TAG, "========== END DETECTION ==========")
+
+            return detections
         } catch (e: Exception) {
-
-            Log.e(
-                TAG,
-                "Gagal saat deteksi: ${e.message}",
-                e
-            )
-
+            Log.e(TAG, "Gagal saat deteksi: ${e.message}", e)
             return emptyList()
-
         } finally {
-
-            isProcessing = false
+            if (scaledBitmap != null && scaledBitmap !== bitmap) {
+                scaledBitmap.recycle()
+            }
+            letterboxBitmap?.recycle()
         }
     }
 
-    /**
-     * Menutup TensorFlow Lite Interpreter.
-     */
+    private fun putInputValue(pixelValue: Int) {
+        val normalized = pixelValue / 255f
+
+        when (inputType) {
+            DataType.FLOAT32 -> inputBuffer.putFloat(normalized)
+
+            DataType.UINT8 -> {
+                val quantized = if (inputScale > 0f) {
+                    (normalized / inputScale + inputZeroPoint)
+                        .toInt()
+                        .coerceIn(0, 255)
+                } else {
+                    pixelValue
+                }
+                inputBuffer.put(quantized.toByte())
+            }
+
+            DataType.INT8 -> {
+                val quantized = if (inputScale > 0f) {
+                    (normalized / inputScale + inputZeroPoint)
+                        .toInt()
+                        .coerceIn(-128, 127)
+                } else {
+                    pixelValue - 128
+                }
+                inputBuffer.put(quantized.toByte())
+            }
+
+            else -> error("Tipe input tidak didukung: $inputType")
+        }
+    }
+
+    private fun classWiseNms(
+        candidates: List<Candidate>,
+        iouThreshold: Float
+    ): List<Candidate> {
+        val selected = mutableListOf<Candidate>()
+
+        for (classId in detectionClasses.indices) {
+            val remaining = candidates
+                .filter { it.classId == classId }
+                .sortedByDescending { it.score }
+                .toMutableList()
+
+            while (remaining.isNotEmpty()) {
+                val best = remaining.removeAt(0)
+                selected.add(best)
+
+                remaining.removeAll { candidate ->
+                    intersectionOverUnion(best, candidate) > iouThreshold
+                }
+            }
+        }
+
+        return selected.sortedByDescending { it.score }
+    }
+
+    private fun intersectionOverUnion(
+        a: Candidate,
+        b: Candidate
+    ): Float {
+        val left = max(a.x1, b.x1)
+        val top = max(a.y1, b.y1)
+        val right = min(a.x2, b.x2)
+        val bottom = min(a.y2, b.y2)
+
+        val intersection =
+            max(0f, right - left) * max(0f, bottom - top)
+
+        val areaA =
+            max(0f, a.x2 - a.x1) * max(0f, a.y2 - a.y1)
+
+        val areaB =
+            max(0f, b.x2 - b.x1) * max(0f, b.y2 - b.y1)
+
+        val union = areaA + areaB - intersection
+
+        return if (union > 0f) intersection / union else 0f
+    }
+
+    private fun format(value: Float): String =
+        String.format(Locale.US, "%.4f", value)
+
+    @Synchronized
     fun close() {
+        if (isClosed) return
 
         interpreter?.close()
-
         interpreter = null
+        isClosed = true
 
-        Log.d(
-            TAG,
-            "YOLO26 Interpreter ditutup."
-        )
+        Log.d(TAG, "YOLO26 Interpreter ditutup.")
     }
 }
