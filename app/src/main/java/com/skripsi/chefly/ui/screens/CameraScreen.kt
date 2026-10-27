@@ -38,6 +38,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
@@ -538,24 +539,61 @@ fun RenderBoundingBox(
     val widthDp = with(density) { widthPx.toDp() }
     val heightDp = with(density) { heightPx.toDp() }
 
+    val isNearTopEdge = topDp < 24.dp
+
     Box(
         modifier = Modifier
             .offset(x = leftDp, y = topDp)
             .size(width = widthDp, height = heightDp)
-            .border(2.dp, Terracotta, RoundedCornerShape(6.dp))
-    ) {
-        Surface(
-            color = Terracotta,
-            modifier = Modifier.align(Alignment.TopStart),
-            shape = RoundedCornerShape(topStart = 4.dp, bottomEnd = 6.dp)
-        ) {
-            Text(
-                text = "${detection.label} ${(detection.confidence * 100).toInt()}%",
-                color = PureSurface,
-                fontSize = 10.sp,
-                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
-                fontWeight = FontWeight.Bold
+            .background(
+                color = Terracotta.copy(alpha = 0.10f),
+                shape = RoundedCornerShape(6.dp)
             )
+            .border(
+                width = 2.5.dp,
+                color = Color.Black.copy(alpha = 0.35f),
+                shape = RoundedCornerShape(6.dp)
+            )
+            .border(
+                width = 1.5.dp,
+                color = Terracotta,
+                shape = RoundedCornerShape(6.dp)
+            )
+    ) {
+        // Tag Label dengan wrapContentWidth agar teks tidak terpotong ellipsis
+        Surface(
+            shape = RoundedCornerShape(6.dp),
+            color = Terracotta,
+            shadowElevation = 3.dp,
+            border = BorderStroke(1.dp, Color.White.copy(alpha = 0.4f)),
+            modifier = Modifier
+                .align(Alignment.TopStart)
+                .wrapContentWidth(unbounded = true) // Biarkan badge melebar keluar kotak
+                .offset(
+                    y = if (isNearTopEdge) 2.dp else (-22).dp,
+                    x = if (isNearTopEdge) 2.dp else 0.dp
+                )
+        ) {
+            Row(
+                modifier = Modifier.padding(horizontal = 7.dp, vertical = 2.5.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(4.dp)
+            ) {
+                Text(
+                    text = detection.label.replaceFirstChar { it.uppercase() },
+                    color = PureSurface,
+                    fontSize = 10.5.sp,
+                    fontWeight = FontWeight.Bold,
+                    softWrap = false
+                )
+                Text(
+                    text = "${(detection.confidence * 100).toInt()}%",
+                    color = PureSurface.copy(alpha = 0.85f),
+                    fontSize = 9.5.sp,
+                    fontWeight = FontWeight.Medium,
+                    softWrap = false
+                )
+            }
         }
     }
 }

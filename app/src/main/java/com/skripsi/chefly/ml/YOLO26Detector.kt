@@ -216,25 +216,28 @@ class YOLO26Detector(
                 INPUT_SIZE
             )
 
-            // 3. PREPROCESS INPUT RGB
+            // 3. PREPROCESS INPUT RGB (Pisahkan loop channel secara eksplisit)
             inputBuffer.clear()
 
             if (inputIsNCHW) {
-                for (channel in 0..2) {
-                    for (pixel in intValues) {
-                        val value = when (channel) {
-                            0 -> (pixel ushr 16) and 0xFF
-                            1 -> (pixel ushr 8) and 0xFF
-                            else -> pixel and 0xFF
-                        }
-                        putInputValue(value)
-                    }
-                }
-            } else {
+                // Red Channel (Channel 0)
                 for (pixel in intValues) {
                     putInputValue((pixel ushr 16) and 0xFF)
+                }
+                // Green Channel (Channel 1)
+                for (pixel in intValues) {
                     putInputValue((pixel ushr 8) and 0xFF)
+                }
+                // Blue Channel (Channel 2)
+                for (pixel in intValues) {
                     putInputValue(pixel and 0xFF)
+                }
+            } else {
+                // Interleaved RGB (NHWC)
+                for (pixel in intValues) {
+                    putInputValue((pixel ushr 16) and 0xFF) // R
+                    putInputValue((pixel ushr 8) and 0xFF)  // G
+                    putInputValue(pixel and 0xFF)         // B
                 }
             }
 
