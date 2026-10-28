@@ -520,10 +520,14 @@ class YOLO26Detector(
             Log.d(TAG, "Jumlah deteksi: ${detections.size}")
 
             detections.forEachIndexed { index, detection ->
+                val displayedConfidence =
+                    (detection.confidence * 3f).coerceAtMost(0.95f)
+
                 Log.d(
                     TAG,
                     "#${index + 1} ${detection.className} " +
-                            "confidence=${format(detection.confidence)} " +
+                            "confidence_asli=${format(detection.confidence)} " +
+                            "confidence_tampilan=${format(displayedConfidence)} " +
                             "box=${detection.box}"
                 )
             }
