@@ -103,6 +103,34 @@ fun String.toDatabaseKey(): String {
     }
 }
 
+fun getSearchAliases(key: String): List<String> {
+    val cleanKey = key.trim().lowercase()
+    return when (cleanKey) {
+        "daging_ayam", "ayam" -> listOf("daging ayam", "ayam")
+        "daging_sapi", "sapi" -> listOf("daging sapi", "sapi")
+        "daging_kambing", "kambing" -> listOf("daging kambing", "kambing")
+        "cabe_merah", "cabai_merah" -> listOf("cabe merah", "cabai merah")
+        "cabe_hijau", "cabai_hijau" -> listOf("cabe hijau", "cabai hijau")
+        "cabe_rawit", "cabai_rawit" -> listOf("cabe rawit", "cabai rawit")
+        "bawang_bombay", "bawang_bombai" -> listOf("bawang bombay", "bawang bombai")
+        "daun_bawang", "loncang" -> listOf("daun bawang", "loncang")
+        "bayam", "bayem" -> listOf("bayam", "bayem")
+        "serai", "sereh" -> listOf("serai", "sereh")
+        "kunyit", "kunir" -> listOf("kunyit", "kunir")
+        "lengkuas", "laos" -> listOf("lengkuas", "laos")
+        "merica", "lada" -> listOf("merica", "lada")
+        "asam_jawa", "asem_jawa" -> listOf("asam jawa", "asem jawa")
+        "bunga_lawang", "pekak" -> listOf("bunga lawang", "pekak")
+        "terasi", "belacan" -> listOf("terasi", "belacan")
+        "sawi" -> listOf("sawi", "caisim")
+        "kubis", "kol" -> listOf("kubis", "kol")
+        "tepung_tapioka", "tapioka", "kanji" -> listOf("tepung tapioka", "tapioka", "kanji")
+        "tepung_panir", "tepung_roti" -> listOf("tepung panir", "tepung roti")
+        "mie", "mi" -> listOf("mie", "mi")
+        else -> listOf(cleanKey.replace("_", " "), cleanKey)
+    }
+}
+
 fun String.toTitleCase(): String {
     return this.replace("_", " ")
         .split(" ")

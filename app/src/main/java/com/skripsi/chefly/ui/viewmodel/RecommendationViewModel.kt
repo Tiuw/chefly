@@ -42,10 +42,6 @@ class RecommendationViewModel @Inject constructor(
         observeIngredients()
     }
 
-    /**
-     * Memantau perubahan daftar bahan secara reactive dari IngredientRepository.
-     * Jika ada bahan yang ditambah/dihapus, kalkulasi Cosine Similarity dipanggil otomatis.
-     */
     private fun observeIngredients() {
         viewModelScope.launch {
             ingredientRepository.currentRecommendationIngredients.collect { ingredientsSet ->
@@ -66,9 +62,6 @@ class RecommendationViewModel @Inject constructor(
         }
     }
 
-    /**
-     * Memastikan status bookmark/favorit tetap sinkron secara real-time.
-     */
     private fun observeFavorites() {
         viewModelScope.launch {
             favoriteManager.favoriteIds.collect { savedIds ->
@@ -83,9 +76,6 @@ class RecommendationViewModel @Inject constructor(
         }
     }
 
-    /**
-     * Menghitung perangkingan Cosine Similarity berdasarkan input bahan CSV.
-     */
     fun getRecommendations(csvIngredients: String) {
         if (csvIngredients.isBlank()) return
 
@@ -93,12 +83,6 @@ class RecommendationViewModel @Inject constructor(
             .map { it.trim() }
             .filter { it.isNotEmpty() }
 
-        if (ingredientsList.isEmpty()) {
-            _uiState.update { it.copy(isLoading = false, recipes = emptyList()) }
-            return
-        }
-
-        // Standardisasi key format database (contoh: "Ayam" -> "daging_ayam", "Cabe Merah" -> "cabe_merah")
         val dbIngredients = ingredientsList.map { it.toDatabaseKey() }
         val dbCsvForQuery = dbIngredients.joinToString(",")
 
@@ -110,14 +94,13 @@ class RecommendationViewModel @Inject constructor(
         _uiState.update {
             it.copy(
                 isLoading = true,
-                ingredientsQuery = dbCsvForQuery, // Format key database untuk pencocokan token di Card/Detail
-                ingredients = ingredientsList    // Format tampilan UI asli untuk Chip/Pantry
+                ingredientsQuery = dbCsvForQuery,
+                ingredients = ingredientsList
             )
         }
 
         viewModelScope.launch(Dispatchers.Default) {
             try {
-                // Perhitungan Cosine Similarity menggunakan representasi token database
                 val aiRecommendations = recommendationSystem.getRecommendations(dbIngredients)
                 val currentFavorites = favoriteManager.favoriteIds.first()
 
@@ -127,7 +110,7 @@ class RecommendationViewModel @Inject constructor(
                         isFavorite = currentFavorites.contains(fullRecipe.id),
                         similarity = result.similarityScore
                     )
-                }.take(10)
+                }.take(10) // 🟢 Menampilkan max 10 resep teratas
 
                 _uiState.update {
                     it.copy(
@@ -140,16 +123,13 @@ class RecommendationViewModel @Inject constructor(
                 _uiState.update {
                     it.copy(
                         isLoading = false,
-                        errorMessage = "Gagal memuat: ${e.message}"
+                        errorMessage = "Gagal memuat rekomendasi"
                     )
                 }
             }
         }
     }
 
-    /**
-     * Menghapus bahan dari daftar aktif secara langsung.
-     */
     fun removeIngredient(ingredient: String) {
         ingredientRepository.removeRecommendationIngredient(ingredient)
     }

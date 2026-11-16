@@ -21,23 +21,24 @@ data class Recipe(
         val trimmed = ingredients.trim()
         if (trimmed.isBlank()) return emptyList()
 
-        return when {
-            // Jalur 1: Menggunakan Regex untuk memotong sekat JSON array [ "item1", "item2" ]
-            trimmed.startsWith("[") && trimmed.endsWith("]") -> {
-                trimmed
-                    .replace(Regex("""^\[\s*\"|\"\s*\]$"""), "") // Hapus [" di awal dan "] di akhir
-                    .split(Regex("""\"\s*,\s*\""""))             // Belah pada sekat "," dengan toleransi spasi
-                    .map { it.replace("\\", "").trim() }
-                    .filter { it.isNotBlank() && !it.lowercase().startsWith("bumbu") }
-            }
-            // Jalur 2: Fallback split koma biasa
-            else -> {
-                trimmed
-                    .split(",")
-                    .map { it.trim().replace("\"", "") } // Hapus kutip yang tersisa
-                    .filter { it.isNotBlank() }
+        if (trimmed.startsWith("[") && trimmed.endsWith("]")) {
+            try {
+                val jsonArray = org.json.JSONArray(trimmed)
+                val list = mutableListOf<String>()
+                for (i in 0 until jsonArray.length()) {
+                    val item = jsonArray.getString(i).trim()
+                    if (item.isNotBlank()) list.add(item)
+                }
+                return list
+            } catch (e: Exception) {
+                // Fallback jika format JSON bermasalah
             }
         }
+
+        return trimmed
+            .split(",")
+            .map { it.trim().replace("\"", "").replace("[", "").replace("]", "") }
+            .filter { it.isNotBlank() }
     }
 
     /**

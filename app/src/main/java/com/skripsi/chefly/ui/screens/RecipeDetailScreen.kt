@@ -35,6 +35,7 @@ import coil.compose.AsyncImage
 import com.skripsi.chefly.data.Recipe
 import com.skripsi.chefly.ui.theme.*
 import com.skripsi.chefly.ui.viewmodel.RecipeDetailViewModel
+import com.skripsi.chefly.util.getSearchAliases
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
@@ -104,11 +105,12 @@ fun RecipeDetailScreen(
                             for (recipeIng in allRecipeIngredients) {
                                 val cleanedRecipeIng = recipeIng.lowercase()
 
-                                // Logika pencocokan kata utuh (Regex boundary)
                                 val isMatched = userIngredientKeys.any { key ->
-                                    val humanReadableKey = key.replace("_", " ")
-                                    val regex = Regex("\\b$humanReadableKey\\b|\\b$key\\b", RegexOption.IGNORE_CASE)
-                                    regex.containsMatchIn(cleanedRecipeIng)
+                                    val aliases = getSearchAliases(key)
+                                    aliases.any { alias ->
+                                        val regex = Regex("\\b$alias\\b", RegexOption.IGNORE_CASE)
+                                        regex.containsMatchIn(cleanedRecipeIng)
+                                    }
                                 }
 
                                 if (isMatched) availableList.add(recipeIng) else missingList.add(recipeIng)

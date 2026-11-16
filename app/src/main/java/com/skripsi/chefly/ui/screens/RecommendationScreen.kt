@@ -39,6 +39,8 @@ import com.skripsi.chefly.R
 import com.skripsi.chefly.data.Recipe
 import com.skripsi.chefly.ui.theme.*
 import com.skripsi.chefly.ui.viewmodel.RecommendationViewModel
+import com.skripsi.chefly.util.getSearchAliases
+import com.skripsi.chefly.util.toTitleCase
 import kotlinx.coroutines.delay
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -59,7 +61,7 @@ fun RecommendationScreen(
     }
 
     if (uiState.isLoading) {
-        CleanIndeterminateLoadingView(query = uiState.ingredientsQuery)
+        CleanIndeterminateLoadingView(query = uiState.ingredients.joinToString(", "))
     } else {
         Scaffold(
             containerColor = CheflyBackground,
@@ -147,7 +149,7 @@ fun RecommendationScreen(
                         AnimatedRecommendationCardWrapper(
                             index = index,
                             recipe = recipe,
-                            currentQuery = uiState.ingredientsQuery,
+                            userIngredients = uiState.ingredients, // 🟢 Kirim list nama bahan asli (bukan query db)
                             onClick = { onRecipeClick(recipe.id, recipe.similarity) },
                             onFavoriteClick = { viewModel.toggleFavorite(recipe) }
                         )
@@ -174,39 +176,72 @@ fun CompactPantryDock(
         shadowElevation = 0.5.dp,
         modifier = Modifier.fillMaxWidth()
     ) {
-        Column(modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp)) {
+        Column(modifier = Modifier.padding(14.dp)) {
             Row(
+                modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                horizontalArrangement = Arrangement.SpaceBetween
             ) {
-                Surface(
-                    shape = RoundedCornerShape(8.dp),
-                    color = CheflySurfaceContainerLow,
-                    modifier = Modifier.size(26.dp)
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    Box(contentAlignment = Alignment.Center) {
+                    Surface(
+                        shape = RoundedCornerShape(8.dp),
+                        color = CheflySurfaceContainerLow,
+                        modifier = Modifier.size(26.dp)
+                    ) {
+                        Box(contentAlignment = Alignment.Center) {
+                            Icon(
+                                imageVector = Icons.Default.Kitchen,
+                                contentDescription = null,
+                                tint = Terracotta,
+                                modifier = Modifier.size(15.dp)
+                            )
+                        }
+                    }
+
+                    Text(
+                        text = "Bahan di Dapur",
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = DeepCharcoal
+                    )
+
+                    Text(
+                        text = "• ${ingredients.size} bahan",
+                        fontSize = 11.5.sp,
+                        color = SecondaryText,
+                        fontWeight = FontWeight.Medium
+                    )
+                }
+
+                // Action Pill Tambah/Ubah Bahan
+                Surface(
+                    shape = RoundedCornerShape(999.dp),
+                    color = Terracotta.copy(alpha = 0.08f),
+                    border = BorderStroke(1.dp, Terracotta.copy(alpha = 0.35f)),
+                    modifier = Modifier.clickable { onAddMore() }
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
                         Icon(
-                            imageVector = Icons.Default.Kitchen,
+                            imageVector = Icons.Default.Edit,
                             contentDescription = null,
                             tint = Terracotta,
-                            modifier = Modifier.size(15.dp)
+                            modifier = Modifier.size(13.dp)
+                        )
+                        Text(
+                            text = "Ubah",
+                            fontSize = 12.sp,
+                            color = Terracotta,
+                            fontWeight = FontWeight.Bold
                         )
                     }
                 }
-
-                Text(
-                    text = "Bahan di Dapur",
-                    fontSize = 13.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = DeepCharcoal
-                )
-
-                Text(
-                    text = "• ${ingredients.size} bahan",
-                    fontSize = 11.5.sp,
-                    color = SecondaryText,
-                    fontWeight = FontWeight.Medium
-                )
             }
 
             Spacer(Modifier.height(10.dp))
@@ -216,8 +251,8 @@ fun CompactPantryDock(
                 verticalArrangement = Arrangement.spacedBy(6.dp),
                 modifier = Modifier.fillMaxWidth()
             ) {
-                ingredients.forEach { rawName ->
-                    val cleanName = rawName.trim().lowercase().replaceFirstChar { it.uppercase() }
+                ingredients.forEach { name ->
+                    val cleanName = name.toTitleCase()
 
                     Surface(
                         shape = RoundedCornerShape(999.dp),
@@ -233,67 +268,35 @@ fun CompactPantryDock(
                         )
                     }
                 }
-
-                // Action Pill Tambah Bahan
-                Surface(
-                    shape = RoundedCornerShape(999.dp),
-                    color = Terracotta.copy(alpha = 0.08f),
-                    border = BorderStroke(1.dp, Terracotta.copy(alpha = 0.35f)),
-                    modifier = Modifier.clickable { onAddMore() }
-                ) {
-                    Row(
-                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(4.dp)
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Add,
-                            contentDescription = null,
-                            tint = Terracotta,
-                            modifier = Modifier.size(13.dp)
-                        )
-                        Text(
-                            text = "Tambah",
-                            fontSize = 12.sp,
-                            color = Terracotta,
-                            fontWeight = FontWeight.Bold
-                        )
-                    }
-                }
             }
         }
     }
 }
 
 /**
- * Kartu Rekomendasi Menu dengan Scrim Kontras & Micro-Badge Tonal
+ * Kartu Rekomendasi Menu
  */
 @Composable
 fun ModernRecommendationCard(
     recipe: Recipe,
-    currentQuery: String = "",
+    userIngredients: List<String> = emptyList(), // 🟢 Menggunakan List<String>
     onClick: () -> Unit,
     onFavoriteClick: () -> Unit
 ) {
-    val ingredientAnalysis = remember(recipe, currentQuery) {
-        val allRecipeIngredients = recipe.ingredientList // List asli dari resep
+    val ingredientAnalysis = remember(recipe, userIngredients) {
+        val allRecipeIngredients = recipe.ingredientList
 
-        if (currentQuery.isNotBlank()) {
-            // 1. Ambil kunci bahan user dari query (format: "daging_sapi,cabe_merah")
-            val userIngredientKeys = currentQuery.split(",")
-                .map { it.trim().lowercase() }
-                .filter { it.isNotEmpty() }
-
+        if (userIngredients.isNotEmpty()) {
             val availableCount = allRecipeIngredients.count { recipeIng ->
                 val cleanedRecipeIng = recipeIng.lowercase()
 
-                // 2. Cek apakah ada KUNCI bahan user yang terkandung sebagai KATA UTUH
-                // Menggunakan Regex \b (word boundary) agar "garam" tidak cocok dengan "margarin"
-                // Menukar "_" dengan spasi atau tetap agar "cabe_merah" cocok dengan "cabe merah"
-                userIngredientKeys.any { key ->
-                    val humanReadableKey = key.replace("_", " ")
-                    val regex = Regex("\\b$humanReadableKey\\b|\\b$key\\b", RegexOption.IGNORE_CASE)
-                    regex.containsMatchIn(cleanedRecipeIng)
+                // Cek ke semua variasi/sinonim bahan dari list user
+                userIngredients.any { userIng ->
+                    val aliases = getSearchAliases(userIng)
+                    aliases.any { alias ->
+                        val regex = Regex("\\b$alias\\b", RegexOption.IGNORE_CASE)
+                        regex.containsMatchIn(cleanedRecipeIng)
+                    }
                 }
             }
 
@@ -446,7 +449,7 @@ fun ModernRecommendationCard(
                 }
 
                 // Micro-Badges Status Bahan
-                if (currentQuery.isNotBlank()) {
+                if (userIngredients.isNotEmpty()) {
                     Spacer(Modifier.height(8.dp))
                     Row(
                         horizontalArrangement = Arrangement.spacedBy(6.dp),
@@ -586,7 +589,7 @@ fun CleanIndeterminateLoadingView(query: String) {
 fun AnimatedRecommendationCardWrapper(
     index: Int,
     recipe: Recipe,
-    currentQuery: String,
+    userIngredients: List<String>,
     onClick: () -> Unit,
     onFavoriteClick: () -> Unit
 ) {
@@ -616,7 +619,7 @@ fun AnimatedRecommendationCardWrapper(
     ) {
         ModernRecommendationCard(
             recipe = recipe,
-            currentQuery = currentQuery,
+            userIngredients = userIngredients,
             onClick = onClick,
             onFavoriteClick = onFavoriteClick
         )
