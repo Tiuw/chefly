@@ -102,3 +102,12 @@ fun String.toDatabaseKey(): String {
         else -> cleanedLabel.replace(" ", "_")
     }
 }
+
+fun String.toTitleCase(): String {
+    return this.replace("_", " ")
+        .split(" ")
+        .filter { it.isNotEmpty() }
+        .joinToString(" ") { word ->
+            word.lowercase().replaceFirstChar { if (it.isLowerCase()) it.titlecase() else it.toString() }
+        }
+}

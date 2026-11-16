@@ -378,24 +378,6 @@ class RecipeRecommendationSystem @Inject constructor(
             appendLine("Judul: $title")
 
             appendLine()
-            appendLine("VEKTOR PENGGUNA A:")
-
-            userVector.forEach { (ingredient, weight) ->
-                appendLine(
-                    "$ingredient = ${format(weight.toDouble())}"
-                )
-            }
-
-            appendLine()
-            appendLine("VEKTOR RESEP B:")
-
-            recipeVector.forEach { (ingredient, weight) ->
-                appendLine(
-                    "$ingredient = ${format(weight.toDouble())}"
-                )
-            }
-
-            appendLine()
             appendLine("DOT PRODUCT:")
 
             dotProductTerms.forEach { (ingredient, a, b) ->

@@ -5,6 +5,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.skripsi.chefly.data.repository.IngredientRepository
+import com.skripsi.chefly.util.toTitleCase
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -116,13 +117,9 @@ class AddIngredientViewModel @Inject constructor(
             ingredientRepository.detectedIngredientsFromCamera.collect { cameraIngredients ->
                 if (cameraIngredients.isNotEmpty()) {
                     val formatted = cameraIngredients.map { name ->
-                        // Pastikan format sama: "ayam" -> "Ayam"
-                        name.replace("_", " ").replaceFirstChar { it.uppercase() }
+                        name.toTitleCase() // 🟢 Menggunakan toTitleCase()
                     }
-                    // Gabungkan dengan yang sudah dipilih sebelumnya
                     _selectedIngredients.value = _selectedIngredients.value + formatted
-
-                    // Bersihkan cache deteksi agar tidak terpanggil berulang kali
                     ingredientRepository.clearDetectedIngredients()
                 }
             }

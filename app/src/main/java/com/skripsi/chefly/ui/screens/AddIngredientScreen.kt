@@ -28,6 +28,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.skripsi.chefly.ui.theme.*
 import com.skripsi.chefly.ui.viewmodel.AddIngredientViewModel
 import com.skripsi.chefly.ui.viewmodel.IngredientUiState
+import com.skripsi.chefly.util.toTitleCase
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -206,7 +207,7 @@ fun CategoryIngredientSection(
                 modifier = Modifier.fillMaxWidth()
             ) {
                 ingredients.forEach { rawName ->
-                    val cleanName = rawName.trim().lowercase().replaceFirstChar { it.uppercase() }
+                    val cleanName = rawName.toTitleCase()
                     val isSelected = selectedIngredients.contains(rawName)
 
                     FluidSelectablePill(
@@ -329,7 +330,7 @@ fun SelectedSummaryDock(
                 modifier = Modifier.fillMaxWidth()
             ) {
                 ingredients.forEach { name ->
-                    val cleanName = name.trim().lowercase().replaceFirstChar { it.uppercase() }
+                    val cleanName = name.toTitleCase()
 
                     Surface(
                         shape = RoundedCornerShape(999.dp),
