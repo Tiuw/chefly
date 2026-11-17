@@ -13,14 +13,3 @@ data class DetectionCamera(
     val className: String
 )
 
-
-data class TrackedObjectCamera(
-    val id: Int,
-    val box: RectF,
-    val classIndex: Int,
-    val className: String,
-    val confidence: Float,
-    val color: Int,
-    val ocrText: String = ""
-)
-

@@ -7,4 +7,3 @@ data class DetectedIngredient(
     val confidence: Float,
     val boundingBox: RectF
 )
-

@@ -1,5 +1,21 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
 
-    <style name="Theme.Chefly" parent="android:Theme.Material.Light.NoActionBar" />
+    <style name="Theme.Chefly" parent="android:Theme.Material.Light.NoActionBar">
+        <item name="android:statusBarColor">#FFFBF6</item> <!-- Sesuaikan hex WarmIvory -->
+        <item name="android:windowLightStatusBar">true</item>
+    </style>
+
+    <!-- Tema Khusus Splash Screen Sistem -->
+    <style name="Theme.Chefly.Starting" parent="Theme.SplashScreen">
+        <!-- Gunakan HEX yang sama dengan WarmIvory di SplashScreen.kt -->
+        <item name="windowSplashScreenBackground">#FFFBF6</item>
+
+        <!-- SET KE TRANSPARAN agar lingkaran di image_d20750.png hilang -->
+        <item name="windowSplashScreenAnimatedIcon">@android:color/transparent</item>
+
+        <!-- Pindah ke tema utama setelah loading awal selesai -->
+        <item name="postSplashScreenTheme">@style/Theme.Chefly</item>
+    </style>
+
 </resources>

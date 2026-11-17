@@ -1,85 +1,90 @@
 package com.skripsi.chefly.data
 
-import com.google.gson.annotations.SerializedName
-
-/**
- * Domain model for recipes stored in Room and parsed from JSON assets.
- * Fields are kept nullable where the  has them nullable.
- */
 data class Recipe(
-    @SerializedName("Title")
+    val id: String,
     val name: String,
-
-    @SerializedName("Ingredients")
-    val rawIngredients: String,
-
-    @SerializedName("Steps")
-    val instructions: String,
-
-    @SerializedName("URL")
     val imageUrl: String,
-
-    @SerializedName("Category")
     val category: String,
-
-    @SerializedName("Ingredients Cleaned")
-    val ingredientsCleaned: String? = null,
-
-    @SerializedName("Total Ingredients")
-    val totalIngredients: Int? = null,
-
-    @SerializedName("Loves")
-    val loves: Int? = null,
-
-    @SerializedName("Title Cleaned")
-    val titleCleaned: String? = null,
-
-    @SerializedName("Total Steps")
-    val totalSteps: Int? = null,
-
-    @SerializedName("PrepTime")
-    val prepTime: String? = null,
-
-    @SerializedName("CookTime")
-    val cookTime: String? = null,
-
-    @SerializedName("Servings")
-    val servings: Int? = null,
-
-    @SerializedName("Id")
-    val id: String? = null
+    val ingredients: String, // Memetakan dari ui_ingredients di Room
+    val steps: String,       // Memetakan dari ui_steps di Room
+    val totalIngredients: Int?,
+    val totalSteps: Int?,
+    val loves: Int?,
+    val similarity: Float = 0f,
+    val isFavorite: Boolean = false
 ) {
-    /**
-     * Returns the ingredient list. Prefer cleaned ingredients when available,
-     * otherwise split the rawIngredients string by common delimiters.
-     */
-    val ingredientList: List<String>
-        get() {
-            val source = (ingredientsCleaned?.takeIf { it.isNotBlank() } ?: rawIngredients)
-            return source
-                .split(Regex("[,;:\n\\r\\-\\–]+"))
-                .map { it.trim().replace(Regex("\\s{2,}"), " ") }
-                .filter { it.isNotEmpty() }
-        }
 
     /**
-     * Returns the instruction steps as a list. Attempts to split numbered steps and newline-delimited steps.
+     * PARSER OTOMATIS UNTUK BAHAN (INGREDIENTS)
      */
-    val instructionList: List<String>
-        get() {
-            // If the instructions are already newline separated, use those
-            val byNewline = instructions.split(Regex("\\r?\\n")).map { it.trim() }.filter { it.isNotEmpty() }
-            if (byNewline.size > 1) return byNewline
+    val ingredientList: List<String> get() {
+        val trimmed = ingredients.trim()
+        if (trimmed.isBlank()) return emptyList()
 
-            // Try splitting by numbered bullets like `1)` `1.` or `1) `
-            val byNumbered = instructions.split(Regex("\\d+\\)\\s*|\\d+\\.\\s*"))
-                .map { it.trim() }
-                .filter { it.isNotEmpty() }
-            if (byNumbered.size > 1) return byNumbered
-
-            // Fallback: split by sentence (period) but keep reasonably sized chunks
-            return instructions.split(Regex("\\.\\s+"))
-                .map { it.trim() }
-                .filter { it.isNotEmpty() }
+        if (trimmed.startsWith("[") && trimmed.endsWith("]")) {
+            try {
+                val jsonArray = org.json.JSONArray(trimmed)
+                val list = mutableListOf<String>()
+                for (i in 0 until jsonArray.length()) {
+                    val item = jsonArray.getString(i).trim()
+                    if (item.isNotBlank()) list.add(item)
+                }
+                return list
+            } catch (e: Exception) {
+                // Fallback jika format JSON bermasalah
+            }
         }
+
+        return trimmed
+            .split(",")
+            .map { it.trim().replace("\"", "").replace("[", "").replace("]", "") }
+            .filter { it.isNotBlank() }
+    }
+
+    /**
+     * PARSER OTOMATIS UNTUK LANGKAH (STEPS)
+     */
+    val stepList: List<String> get() {
+        val trimmed = steps.trim()
+        if (trimmed.isBlank()) return emptyList()
+
+        // 1. Ekstrak string mentah dari bungkus JSON array jika ada
+        val cleanRawString = if (trimmed.startsWith("[") && trimmed.endsWith("]")) {
+            trimmed.replace(Regex("""^\[\s*\"|\"\s*\]$"""), "")
+        } else {
+            trimmed
+        }
+
+        // 2. Strategi Pemecahan (Splitting) menggunakan Regex yang lebih agresif
+        val rawSteps = when {
+            // Jika ada sekat JSON murni " , " atau ","
+            cleanRawString.contains("\",\"") || cleanRawString.contains("\", \"") -> {
+                cleanRawString.split(Regex("""\"\s*,\s*\""""))
+            }
+            // Jika data menggumpal tapi dipisahkan penomoran internal seperti "2) ", "3) "
+            cleanRawString.contains(Regex("""\d+[\)\.]\s""")) -> {
+                cleanRawString.split(Regex("""\s*,\s*\"\s*\d+[\)\.]\s*|\s*\"\s*,\s*\"\s*|\s*\d+[\)\.]\s*"""))
+            }
+            // Fallback split koma biasa
+            else -> {
+                cleanRawString.split(",")
+            }
+        }
+
+        // 3. Bersihkan sisa-sisa karakter kotor dan penomoran ganda
+        return rawSteps
+            .map { it.replace("\\", "").replace("\"", "").trim() }
+            .map { cleanStepNumbering(it) }
+            .filter { it.isNotBlank() && it.length > 3 }
+    }
+
+    /**
+     * Regex untuk mengikis penomoran kotor bawaan teks database (misal: '1) Siapkan' -> 'Siapkan')
+     * Ini krusial agar tampilan nomor di Jetpack Compose tidak double-numbering.
+     */
+    private fun cleanStepNumbering(text: String): String {
+        return text
+            .replace(Regex("^\\s*\"?\\s*\\d+[\u0029\\.]\\s*"), "") // Menghapus format '1)' atau '1.' di awal kalimat
+            .trim()
+    }
 }

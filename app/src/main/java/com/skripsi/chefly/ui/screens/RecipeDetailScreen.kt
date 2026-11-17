@@ -1,449 +1,710 @@
 package com.skripsi.chefly.ui.screens
 
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.*
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ArrowBack
-import androidx.compose.material.icons.filled.Favorite
-import androidx.compose.material.icons.filled.FavoriteBorder
+import androidx.compose.material.icons.filled.*
+import androidx.compose.material.icons.outlined.BookmarkBorder
 import androidx.compose.material3.*
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.produceState
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.compose.ui.unit.em
-import coil.compose.SubcomposeAsyncImage
+import androidx.navigation.NavHostController
+import coil.compose.AsyncImage
 import com.skripsi.chefly.data.Recipe
-import com.skripsi.chefly.ui.RecipeViewModel
-import com.skripsi.chefly.data.repository.RecipeRepository
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.withContext
+import com.skripsi.chefly.ui.theme.*
+import com.skripsi.chefly.ui.viewmodel.RecipeDetailViewModel
+import com.skripsi.chefly.util.getSearchAliases
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 
-@OptIn(ExperimentalMaterial3Api::class)
-@Suppress("DEPRECATION")
 @Composable
 fun RecipeDetailScreen(
+    navController: NavHostController,
     recipeId: String,
-    viewModel: RecipeViewModel,
-    onBackClick: () -> Unit
+    currentQuery: String = "",
+    passedSimilarity: Float = 0f,
+    viewModel: RecipeDetailViewModel
 ) {
-    val context = LocalContext.current
+    val recipe by viewModel.recipe.collectAsState()
+    val isLoading by viewModel.isLoading.collectAsState()
+    val error by viewModel.loadError.collectAsState()
 
-    // Load recipe from Room DB via repository
-    val recipeState by produceState<Recipe?>(initialValue = null, recipeId) {
-        val loaded = withContext(Dispatchers.IO) {
-            try {
-                RecipeRepository.init(context)
-                RecipeRepository.getRecipeById(context, recipeId)
-            } catch (e: Exception) {
-                e.printStackTrace()
-                null
-            }
-        }
-        value = loaded
-    }
+    val scrollState = rememberScrollState()
+    val coroutineScope = rememberCoroutineScope()
+    var startAnimation by remember { mutableStateOf(false) }
 
-    val recipe = recipeState
+    val bookmarkScale = remember { Animatable(1f) }
 
-    if (recipe == null) {
-        Scaffold(
-            topBar = {
-                TopAppBar(
-                    title = { Text("Recipe Not Found") },
-                    navigationIcon = {
-                        IconButton(onClick = onBackClick) {
-                            Icon(Icons.Filled.ArrowBack, contentDescription = "Back")
-                        }
-                    }
-                )
-            }
-        ) { padding ->
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(padding)
-            ) {
-                Text("Recipe not found")
-            }
-        }
-        return
+    LaunchedEffect(recipeId) {
+        viewModel.loadRecipe(recipeId)
+        delay(80)
+        startAnimation = true
     }
 
     Scaffold(
-        topBar = {
-            TopAppBar(
-                title = { Text("Recipe Details") },
-                navigationIcon = {
-                    IconButton(onClick = onBackClick) {
-                        Icon(Icons.Filled.ArrowBack, contentDescription = "Back")
+        containerColor = CheflyBackground
+    ) { innerPadding ->
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(bottom = innerPadding.calculateBottomPadding())
+        ) {
+            if (isLoading) {
+                CircularProgressIndicator(
+                    modifier = Modifier.align(Alignment.Center),
+                    color = Terracotta,
+                    strokeWidth = 3.dp
+                )
+            } else if (error != null) {
+                Text(
+                    text = error ?: "Terjadi kesalahan",
+                    modifier = Modifier
+                        .align(Alignment.Center)
+                        .padding(24.dp),
+                    color = ErrorCoral,
+                    fontSize = 14.sp,
+                    fontWeight = FontWeight.Medium,
+                    textAlign = TextAlign.Center
+                )
+            } else {
+                recipe?.let { currentRecipe ->
+
+                    val ingredientAnalysis = remember(currentRecipe, currentQuery) {
+                        val allRecipeIngredients = currentRecipe.ingredientList
+
+                        if (currentQuery.isNotBlank()) {
+                            val userIngredientKeys = currentQuery.split(",")
+                                .map { it.trim().lowercase() }
+                                .filter { it.isNotEmpty() }
+
+                            val availableList = mutableListOf<String>()
+                            val missingList = mutableListOf<String>()
+
+                            for (recipeIng in allRecipeIngredients) {
+                                val cleanedRecipeIng = recipeIng.lowercase()
+
+                                val isMatched = userIngredientKeys.any { key ->
+                                    val aliases = getSearchAliases(key)
+                                    aliases.any { alias ->
+                                        val regex = Regex("\\b$alias\\b", RegexOption.IGNORE_CASE)
+                                        regex.containsMatchIn(cleanedRecipeIng)
+                                    }
+                                }
+
+                                if (isMatched) availableList.add(recipeIng) else missingList.add(recipeIng)
+                            }
+                            Pair(availableList, missingList)
+                        } else {
+                            Pair(emptyList<String>(), allRecipeIngredients)
+                        }
                     }
-                },
-                actions = {
-                    IconButton(onClick = { viewModel.toggleFavorite(recipeId) }) {
-                        Icon(
-                            imageVector = if (viewModel.isFavorite(recipeId))
-                                Icons.Default.Favorite
-                            else
-                                Icons.Default.FavoriteBorder,
-                            contentDescription = "Favorite",
-                            tint = if (viewModel.isFavorite(recipeId))
-                                MaterialTheme.colorScheme.error
-                            else
-                                MaterialTheme.colorScheme.onSurface
+                    val (availableIngredients, missingIngredients) = ingredientAnalysis
+
+                    val actualSimilarity = if (currentRecipe.similarity == 0f) passedSimilarity else currentRecipe.similarity
+                    val displayScore = (actualSimilarity * 100).toInt()
+
+                    val topBarThreshold = 420f
+                    val headerAlpha = (scrollState.value / topBarThreshold).coerceIn(0f, 1f)
+
+                    Column(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .verticalScroll(scrollState)
+                    ) {
+                        // --- 1. Parallax Hero Image Section ---
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(310.dp)
+                                .graphicsLayer {
+                                    translationY = scrollState.value * 0.45f
+                                    alpha = (1f - (scrollState.value / 600f)).coerceIn(0f, 1f)
+                                }
+                                .clip(RoundedCornerShape(bottomStart = 28.dp, bottomEnd = 28.dp))
+                        ) {
+                            AsyncImage(
+                                model = currentRecipe.imageUrl,
+                                contentDescription = currentRecipe.name,
+                                contentScale = ContentScale.Crop,
+                                modifier = Modifier.fillMaxSize()
+                            )
+
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .background(
+                                        Brush.verticalGradient(
+                                            colors = listOf(
+                                                Color.Black.copy(alpha = 0.5f),
+                                                Color.Transparent,
+                                                Color.Black.copy(alpha = 0.7f)
+                                            )
+                                        )
+                                    )
+                            )
+
+                            // Hero Bottom Badges
+                            Row(
+                                modifier = Modifier
+                                    .align(Alignment.BottomStart)
+                                    .padding(16.dp),
+                                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Surface(
+                                    shape = RoundedCornerShape(8.dp),
+                                    color = DeepCharcoal.copy(alpha = 0.85f)
+                                ) {
+                                    Text(
+                                        text = currentRecipe.category.uppercase(),
+                                        fontSize = 10.sp,
+                                        fontWeight = FontWeight.Black,
+                                        letterSpacing = 0.6.sp,
+                                        color = PureSurface,
+                                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                                    )
+                                }
+
+                                Surface(
+                                    shape = RoundedCornerShape(8.dp),
+                                    color = DeepCharcoal.copy(alpha = 0.65f)
+                                ) {
+                                    Row(
+                                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(4.dp)
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Default.Favorite,
+                                            contentDescription = null,
+                                            tint = Terracotta,
+                                            modifier = Modifier.size(11.dp)
+                                        )
+                                        Text(
+                                            text = "${currentRecipe.loves}",
+                                            fontSize = 10.sp,
+                                            fontWeight = FontWeight.Bold,
+                                            color = PureSurface
+                                        )
+                                    }
+                                }
+                            }
+                        }
+
+                        // --- 2. Content Body ---
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 16.dp)
+                        ) {
+                            AnimatedDetailSection(isVisible = startAnimation, delayMillis = 50) {
+                                Column {
+                                    Spacer(Modifier.height(16.dp))
+                                    Text(
+                                        text = currentRecipe.name,
+                                        color = DeepCharcoal,
+                                        fontSize = 22.sp,
+                                        fontWeight = FontWeight.Black,
+                                        lineHeight = 28.sp,
+                                        letterSpacing = (-0.4).sp
+                                    )
+                                }
+                            }
+
+                            // AI Match Score Micro-Card
+                            if (actualSimilarity > 0f) {
+                                AnimatedDetailSection(isVisible = startAnimation, delayMillis = 120) {
+                                    Column {
+                                        Spacer(Modifier.height(14.dp))
+                                        Surface(
+                                            modifier = Modifier.fillMaxWidth(),
+                                            shape = RoundedCornerShape(16.dp),
+                                            color = PureSurface,
+                                            border = BorderStroke(1.dp, WhisperBorder),
+                                            shadowElevation = 0.5.dp
+                                        ) {
+                                            Column(modifier = Modifier.padding(14.dp)) {
+                                                Row(
+                                                    modifier = Modifier.fillMaxWidth(),
+                                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                                    verticalAlignment = Alignment.CenterVertically
+                                                ) {
+                                                    Row(
+                                                        verticalAlignment = Alignment.CenterVertically,
+                                                        horizontalArrangement = Arrangement.spacedBy(10.dp)
+                                                    ) {
+                                                        Surface(
+                                                            modifier = Modifier.size(36.dp),
+                                                            shape = RoundedCornerShape(10.dp),
+                                                            color = CheflySurfaceContainerLow
+                                                        ) {
+                                                            Box(contentAlignment = Alignment.Center) {
+                                                                Icon(
+                                                                    imageVector = Icons.Default.AutoAwesome,
+                                                                    contentDescription = null,
+                                                                    tint = Terracotta,
+                                                                    modifier = Modifier.size(18.dp)
+                                                                )
+                                                            }
+                                                        }
+                                                        Column {
+                                                            Text(
+                                                                text = "Kecocokan Bahan Kulkas",
+                                                                fontSize = 11.sp,
+                                                                fontWeight = FontWeight.Bold,
+                                                                color = SecondaryText
+                                                            )
+                                                            Text(
+                                                                text = if (displayScore >= 75) "Sangat Cocok Dimasak" else "Bahan Cukup Terpenuhi",
+                                                                fontSize = 13.sp,
+                                                                fontWeight = FontWeight.Bold,
+                                                                color = DeepCharcoal
+                                                            )
+                                                        }
+                                                    }
+
+                                                    Text(
+                                                        text = "$displayScore%",
+                                                        fontSize = 20.sp,
+                                                        fontWeight = FontWeight.Black,
+                                                        color = Terracotta
+                                                    )
+                                                }
+
+                                                var progressTriggered by remember { mutableStateOf(false) }
+                                                LaunchedEffect(startAnimation) {
+                                                    if (startAnimation) {
+                                                        delay(180)
+                                                        progressTriggered = true
+                                                    }
+                                                }
+
+                                                val animatedProgress by animateFloatAsState(
+                                                    targetValue = if (progressTriggered) actualSimilarity else 0f,
+                                                    animationSpec = tween(durationMillis = 900, easing = FastOutSlowInEasing),
+                                                    label = "progressAnim"
+                                                )
+
+                                                Spacer(Modifier.height(10.dp))
+                                                LinearProgressIndicator(
+                                                    progress = { animatedProgress },
+                                                    modifier = Modifier
+                                                        .fillMaxWidth()
+                                                        .height(5.dp)
+                                                        .clip(CircleShape),
+                                                    color = Terracotta,
+                                                    trackColor = CheflySurfaceContainerLow
+                                                )
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+
+                            Spacer(Modifier.height(22.dp))
+
+                            // --- 3. Unified Ingredients Container ---
+                            AnimatedDetailSection(isVisible = startAnimation, delayMillis = 200) {
+                                Column {
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.SpaceBetween,
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Text(
+                                            text = "Bahan yang Dibutuhkan",
+                                            fontSize = 16.sp,
+                                            fontWeight = FontWeight.Bold,
+                                            color = DeepCharcoal
+                                        )
+                                        Text(
+                                            text = "${currentRecipe.ingredientList.size} item",
+                                            fontSize = 12.sp,
+                                            fontWeight = FontWeight.Medium,
+                                            color = SecondaryText
+                                        )
+                                    }
+
+                                    Spacer(Modifier.height(10.dp))
+
+                                    Surface(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        shape = RoundedCornerShape(16.dp),
+                                        color = PureSurface,
+                                        border = BorderStroke(1.dp, WhisperBorder),
+                                        shadowElevation = 0.5.dp
+                                    ) {
+                                        Column(modifier = Modifier.padding(14.dp)) {
+                                            if (actualSimilarity > 0f) {
+                                                // Group 1: Bahan Tersedia di Kulkas
+                                                if (availableIngredients.isNotEmpty()) {
+                                                    IngredientGroupHeader(
+                                                        title = "Tersedia di Dapur",
+                                                        count = availableIngredients.size,
+                                                        accentColor = Color(0xFF2E6B47)
+                                                    )
+                                                    availableIngredients.forEachIndexed { index, name ->
+                                                        ExplicitIngredientRow(
+                                                            name = name,
+                                                            isAvailable = true,
+                                                            showDivider = index != availableIngredients.lastIndex || missingIngredients.isNotEmpty()
+                                                        )
+                                                    }
+                                                }
+
+                                                // Group 2: Bahan Tambahan
+                                                if (missingIngredients.isNotEmpty()) {
+                                                    if (availableIngredients.isNotEmpty()) Spacer(Modifier.height(12.dp))
+                                                    IngredientGroupHeader(
+                                                        title = "Perlu Ditambahkan",
+                                                        count = missingIngredients.size,
+                                                        accentColor = Terracotta
+                                                    )
+                                                    missingIngredients.forEachIndexed { index, name ->
+                                                        ExplicitIngredientRow(
+                                                            name = name,
+                                                            isAvailable = false,
+                                                            showDivider = index != missingIngredients.lastIndex
+                                                        )
+                                                    }
+                                                }
+                                            } else {
+                                                currentRecipe.ingredientList.forEachIndexed { index, name ->
+                                                    ExplicitIngredientRow(
+                                                        name = name,
+                                                        isAvailable = null,
+                                                        showDivider = index != currentRecipe.ingredientList.lastIndex
+                                                    )
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+
+                            Spacer(Modifier.height(26.dp))
+
+                            // --- 4. Cara Memasak Section (Data Asli Utuh) ---
+                            AnimatedDetailSection(isVisible = startAnimation, delayMillis = 280) {
+                                Column {
+                                    Text(
+                                        text = "Cara Memasak",
+                                        fontSize = 16.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = DeepCharcoal
+                                    )
+
+                                    Spacer(Modifier.height(14.dp))
+
+                                    Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
+                                        currentRecipe.stepList.forEachIndexed { index, stepText ->
+                                            CleanInstructionRow(
+                                                stepNumber = index + 1,
+                                                instruction = stepText
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+
+                            Spacer(Modifier.height(44.dp))
+                        }
+                    }
+
+                    // --- Dynamic Sticky Floating TopBar ---
+                    Surface(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .align(Alignment.TopCenter),
+                        color = PureSurface.copy(alpha = (headerAlpha * 0.95f)),
+                        shadowElevation = if (headerAlpha > 0.8f) 2.dp else 0.dp
+                    ) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .statusBarsPadding()
+                                .padding(horizontal = 16.dp, vertical = 10.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Surface(
+                                shape = CircleShape,
+                                color = PureSurface.copy(alpha = if (headerAlpha > 0.5f) 0.8f else 0.92f),
+                                border = BorderStroke(1.dp, WhisperBorder),
+                                shadowElevation = 1.dp,
+                                modifier = Modifier
+                                    .size(38.dp)
+                                    .clickable { navController.navigateUp() }
+                            ) {
+                                Box(contentAlignment = Alignment.Center) {
+                                    Icon(
+                                        imageVector = Icons.Default.ArrowBack,
+                                        contentDescription = "Kembali",
+                                        tint = DeepCharcoal,
+                                        modifier = Modifier.size(18.dp)
+                                    )
+                                }
+                            }
+
+                            AnimatedVisibility(
+                                visible = headerAlpha > 0.75f,
+                                enter = fadeIn(),
+                                exit = fadeOut(),
+                                modifier = Modifier.weight(1f).padding(horizontal = 12.dp)
+                            ) {
+                                Text(
+                                    text = currentRecipe.name,
+                                    fontSize = 14.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = DeepCharcoal,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
+                                    textAlign = TextAlign.Center
+                                )
+                            }
+
+                            Surface(
+                                shape = CircleShape,
+                                color = PureSurface.copy(alpha = if (headerAlpha > 0.5f) 0.8f else 0.92f),
+                                border = BorderStroke(1.dp, WhisperBorder),
+                                shadowElevation = 1.dp,
+                                modifier = Modifier
+                                    .size(38.dp)
+                                    .graphicsLayer {
+                                        scaleX = bookmarkScale.value
+                                        scaleY = bookmarkScale.value
+                                    }
+                                    .clickable(
+                                        interactionSource = remember { MutableInteractionSource() },
+                                        indication = null,
+                                        onClick = {
+                                            coroutineScope.launch {
+                                                bookmarkScale.animateTo(
+                                                    targetValue = 0.75f,
+                                                    animationSpec = tween(70)
+                                                )
+                                                bookmarkScale.animateTo(
+                                                    targetValue = 1.2f,
+                                                    animationSpec = spring(
+                                                        dampingRatio = Spring.DampingRatioMediumBouncy,
+                                                        stiffness = Spring.StiffnessLow
+                                                    )
+                                                )
+                                                bookmarkScale.animateTo(1f)
+                                            }
+                                            viewModel.toggleFavorite()
+                                        }
+                                    )
+                            ) {
+                                Box(contentAlignment = Alignment.Center) {
+                                    Icon(
+                                        imageVector = if (currentRecipe.isFavorite) Icons.Default.Bookmark else Icons.Outlined.BookmarkBorder,
+                                        contentDescription = "Simpan",
+                                        tint = if (currentRecipe.isFavorite) Terracotta else DeepCharcoal,
+                                        modifier = Modifier.size(18.dp)
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+/**
+ * Sub-Header Grup Bahan
+ */
+@Composable
+fun IngredientGroupHeader(
+    title: String,
+    count: Int,
+    accentColor: Color
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(bottom = 6.dp, top = 2.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(6.dp)
+    ) {
+        Box(
+            modifier = Modifier
+                .size(6.dp)
+                .clip(CircleShape)
+                .background(accentColor)
+        )
+        Text(
+            text = "$title ($count)",
+            fontSize = 11.5.sp,
+            fontWeight = FontWeight.Bold,
+            color = accentColor,
+            letterSpacing = 0.4.sp
+        )
+    }
+}
+
+/**
+ * Baris Bahan dengan Kontras Badge Tinggi
+ */
+@Composable
+fun ExplicitIngredientRow(
+    name: String,
+    isAvailable: Boolean?,
+    showDivider: Boolean
+) {
+    Column(modifier = Modifier.fillMaxWidth()) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(vertical = 10.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            Text(
+                text = name,
+                fontSize = 13.5.sp,
+                fontWeight = FontWeight.Medium,
+                color = DeepCharcoal,
+                modifier = Modifier.weight(1f)
+            )
+
+            when (isAvailable) {
+                true -> {
+                    Surface(
+                        shape = RoundedCornerShape(6.dp),
+                        color = Color(0xFFE8F5E9),
+                        border = BorderStroke(0.5.dp, Color(0xFFA5D6A7))
+                    ) {
+                        Text(
+                            text = "Tersedia",
+                            fontSize = 10.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = Color(0xFF1B5E20),
+                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
                         )
                     }
                 }
+                false -> {
+                    Surface(
+                        shape = RoundedCornerShape(6.dp),
+                        color = CheflySurfaceContainerLow,
+                        border = BorderStroke(0.5.dp, Terracotta.copy(alpha = 0.3f))
+                    ) {
+                        Text(
+                            text = "Beli",
+                            fontSize = 10.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = Terracotta,
+                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
+                        )
+                    }
+                }
+                null -> {}
+            }
+        }
+
+        if (showDivider) {
+            HorizontalDivider(
+                thickness = 0.5.dp,
+                color = WhisperBorder.copy(alpha = 0.6f)
             )
         }
-    ) { padding ->
-        RecipeDetailContent(
-            recipe = recipe,
-            viewModel = viewModel,
-            recipeId = recipeId,
-            modifier = Modifier.padding(padding)
-        )
     }
 }
 
+/**
+ * Baris Instruksi Memasak Tipografis
+ */
 @Composable
-fun RecipeDetailContent(
-    recipe: Recipe,
-    viewModel: RecipeViewModel,
-    recipeId: String,
-    modifier: Modifier = Modifier
+fun CleanInstructionRow(
+    stepNumber: Int,
+    instruction: String
 ) {
-    val cleanedIngredients = recipe.ingredientList
-        .map(::cleanRecipeText)
-        .filter { it.isNotBlank() }
-
-    val cleanedSteps = recipe.instructionList
-        .map(::cleanRecipeText)
-        .map { it.replace(Regex("^\\d+[.)]\\s*"), "") }
-        .filter { it.isNotBlank() }
-
-    LazyColumn(
-        modifier = modifier.fillMaxSize(),
-        contentPadding = PaddingValues(bottom = 16.dp),
-        verticalArrangement = Arrangement.spacedBy(8.dp)
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+        verticalAlignment = Alignment.Top
     ) {
-        // Recipe Hero Image - IMPROVED with gradient overlay
-        item {
-            val imageUrl = recipe.imageUrl.trim()
-            val isValidImageUrl = imageUrl.isNotEmpty() &&
-                (imageUrl.startsWith("http://") || imageUrl.startsWith("https://"))
-
-            if (isValidImageUrl) {
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(350.dp)  // Taller image
-                ) {
-                    // Main Image with rounded bottom corners
-                    SubcomposeAsyncImage(
-                        model = imageUrl,
-                        contentDescription = recipe.name,
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .clip(RoundedCornerShape(bottomStart = 24.dp, bottomEnd = 24.dp)),
-                        contentScale = ContentScale.Crop,
-                        loading = {
-                            Box(
-                                modifier = Modifier
-                                    .fillMaxSize()
-                                    .background(MaterialTheme.colorScheme.surfaceVariant),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                CircularProgressIndicator(modifier = Modifier.size(40.dp))
-                            }
-                        },
-                        error = {
-                            Box(
-                                modifier = Modifier
-                                    .fillMaxSize()
-                                    .background(MaterialTheme.colorScheme.surfaceVariant),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Text("Image error", style = MaterialTheme.typography.bodySmall)
-                            }
-                        }
-                    )
-
-                    // Gradient Overlay
-                    Box(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .background(
-                                brush = Brush.verticalGradient(
-                                    colors = listOf(
-                                        Color.Transparent,
-                                        Color.Black.copy(alpha = 0.3f)
-                                    ),
-                                    startY = 100f
-                                )
-                            )
-                    )
-
-                    // Favorite Button (Top Right) - IMPROVED
-                    IconButton(
-                        onClick = { viewModel.toggleFavorite(recipeId) },
-                        modifier = Modifier
-                            .align(Alignment.TopEnd)
-                            .padding(16.dp)
-                            .background(
-                                color = Color.White.copy(alpha = 0.9f),
-                                shape = CircleShape
-                            )
-                    ) {
-                        Icon(
-                            imageVector = if (viewModel.isFavorite(recipeId))
-                                Icons.Default.Favorite
-                            else
-                                Icons.Default.FavoriteBorder,
-                            contentDescription = "Favorite",
-                            tint = if (viewModel.isFavorite(recipeId))
-                                MaterialTheme.colorScheme.error
-                            else
-                                MaterialTheme.colorScheme.outline,
-                            modifier = Modifier.size(28.dp)
-                        )
-                    }
-                }
-            }
-        }
-
-        // Recipe Title & Category - IMPROVED
-        item {
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(20.dp),
-                verticalArrangement = Arrangement.spacedBy(12.dp)
-            ) {
-                // Title - much larger
+        Surface(
+            shape = RoundedCornerShape(8.dp),
+            color = if (stepNumber == 1) Terracotta else CheflySurfaceContainerLow,
+            modifier = Modifier.size(26.dp)
+        ) {
+            Box(contentAlignment = Alignment.Center) {
                 Text(
-                    text = recipe.name,
-                    style = MaterialTheme.typography.headlineSmall,
+                    text = "$stepNumber",
+                    color = if (stepNumber == 1) PureSurface else DeepCharcoal,
                     fontWeight = FontWeight.Bold,
-                    fontSize = 28.sp
-                )
-
-                // Category Badge - with background
-                Surface(
-                    shape = RoundedCornerShape(8.dp),
-                    color = MaterialTheme.colorScheme.primaryContainer
-                ) {
-                    Text(
-                        text = "📁 ${recipe.category}",
-                        style = MaterialTheme.typography.labelMedium,
-                        modifier = Modifier.padding(8.dp, 6.dp),
-                        color = MaterialTheme.colorScheme.onPrimaryContainer,
-                        fontWeight = FontWeight.SemiBold
-                    )
-                }
-
-                // Stats Row
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(16.dp)
-                ) {
-                    if (recipe.totalSteps != null) {
-                        Row(
-                            horizontalArrangement = Arrangement.spacedBy(4.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Text("⏱️", fontSize = 18.sp)
-                            Text(
-                                text = "${recipe.totalSteps} steps",
-                                style = MaterialTheme.typography.labelMedium
-                            )
-                        }
-                    }
-
-                    if (recipe.totalIngredients != null) {
-                        Row(
-                            horizontalArrangement = Arrangement.spacedBy(4.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Text("🥘", fontSize = 18.sp)
-                            Text(
-                                text = "${recipe.totalIngredients} ingredients",
-                                style = MaterialTheme.typography.labelMedium
-                            )
-                        }
-                    }
-                }
-            }
-        }
-
-        // Ingredients Section
-        item {
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(20.dp),
-                verticalArrangement = Arrangement.spacedBy(12.dp)
-            ) {
-                Text(
-                    text = "Ingredients",
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold
-                )
-
-                HorizontalDivider()
-            }
-        }
-
-        // Ingredient Items
-        items(cleanedIngredients.size) { index ->
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 20.dp, vertical = 8.dp),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                verticalAlignment = Alignment.Top
-            ) {
-                Text(
-                    text = "${index + 1}.",
-                    style = MaterialTheme.typography.bodyMedium,
-                    fontWeight = FontWeight.SemiBold,
-                    color = MaterialTheme.colorScheme.primary
-                )
-
-                Text(
-                    text = cleanedIngredients[index],
-                    style = MaterialTheme.typography.bodyMedium,
-                    fontWeight = FontWeight.Medium,
-                    maxLines = 3,
-                    overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.weight(1f)
-                )
-            }
-
-            if (index < cleanedIngredients.size - 1) {
-                HorizontalDivider(modifier = Modifier.padding(horizontal = 20.dp, vertical = 4.dp))
-            }
-        }
-
-        // Steps Section
-        item {
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(20.dp),
-                verticalArrangement = Arrangement.spacedBy(12.dp)
-            ) {
-                Text(
-                    text = "Steps (${cleanedSteps.size})",
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold
+                    fontSize = 11.sp
                 )
             }
         }
 
-        // Step Items
-        items(cleanedSteps.size) { index ->
-            Card(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 16.dp),
-                shape = RoundedCornerShape(12.dp),
-                elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
-                colors = CardDefaults.cardColors(
-                    containerColor = MaterialTheme.colorScheme.surface
-                )
-            ) {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(16.dp),
-                    horizontalArrangement = Arrangement.spacedBy(16.dp)
-                ) {
-                    Surface(
-                        modifier = Modifier.size(40.dp),
-                        shape = CircleShape,
-                        color = MaterialTheme.colorScheme.primary
-                    ) {
-                        Box(
-                            modifier = Modifier.fillMaxSize(),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Text(
-                                text = (index + 1).toString(),
-                                style = MaterialTheme.typography.labelLarge,
-                                fontWeight = FontWeight.Bold,
-                                color = MaterialTheme.colorScheme.onPrimary,
-                                fontSize = 18.sp
-                            )
-                        }
-                    }
-
-                    Text(
-                        text = cleanedSteps[index],
-                        style = MaterialTheme.typography.bodyMedium,
-                        modifier = Modifier.weight(1f),
-                        lineHeight = 1.5.em,
-                        maxLines = Int.MAX_VALUE,
-                        overflow = TextOverflow.Clip
-                    )
-                }
-            }
-        }
-
-        item {
-            Spacer(modifier = Modifier.height(8.dp))
-        }
+        Text(
+            text = instruction,
+            fontSize = 13.5.sp,
+            color = DeepCharcoal,
+            lineHeight = 21.sp,
+            fontWeight = FontWeight.Normal,
+            modifier = Modifier.weight(1f)
+        )
     }
 }
 
-private fun cleanRecipeText(raw: String): String {
-    return raw
-        .trim()
-        .replace(Regex("^\\[\\s*"), "")
-        .replace(Regex("\\s*]$"), "")
-        .replace(Regex("^\""), "")
-        .replace(Regex("\"$"), "")
-        .replace(Regex("^'"), "")
-        .replace(Regex("'$"), "")
-        .replace("\\\"", "\"")
-        .trim()
-}
-
+/**
+ * Staggered Entrance Animation Container
+ */
 @Composable
-fun CompactStatCard(
-    label: String,
-    value: String,
-    modifier: Modifier = Modifier
+fun AnimatedDetailSection(
+    isVisible: Boolean,
+    delayMillis: Int,
+    content: @Composable () -> Unit
 ) {
-    Column(
-        modifier = modifier
-            .padding(8.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Center
+    val alpha by animateFloatAsState(
+        targetValue = if (isVisible) 1f else 0f,
+        animationSpec = tween(durationMillis = 450, delayMillis = delayMillis, easing = FastOutSlowInEasing),
+        label = "alphaDetailAnim"
+    )
+    val translationY by animateFloatAsState(
+        targetValue = if (isVisible) 0f else 30f,
+        animationSpec = spring(
+            dampingRatio = Spring.DampingRatioMediumBouncy,
+            stiffness = Spring.StiffnessLow,
+            visibilityThreshold = 0.5f
+        ),
+        label = "transYDetailAnim"
+    )
+
+    Box(
+        modifier = Modifier.graphicsLayer {
+            this.alpha = alpha
+            this.translationY = translationY
+        }
     ) {
-        Text(
-            text = value,
-            style = MaterialTheme.typography.titleSmall,
-            fontWeight = FontWeight.Bold
-        )
-        Text(
-            text = label,
-            style = MaterialTheme.typography.labelSmall,
-            color = MaterialTheme.colorScheme.outline
-        )
+        content()
     }
 }
-
